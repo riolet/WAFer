@@ -1,7 +1,7 @@
-all: httpd
+all: server
 
-httpd: httpd.c
-	gcc -W -Wall -pthread -o httpd httpd.c
+server: httpd.c
+	gcc -W -Wall -pthread -o server httpd.c server.c
 
 clean:
-	rm httpd
+	rm server

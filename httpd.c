@@ -1,17 +1,12 @@
-/* J. David's webserver */
-/* This is a simple webserver.
- * Created November 1999 by J. David Blackstone.
- * CSE 4344 (Network concepts), Prof. Zeigler
- * University of Texas at Arlington
+/* ritchie is a C language-based software platform 
+ * for scalable server-side and networking applications. 
+ * Think node.js for C programmers.
+ * By Rohana Rezel of Riolet Corporation based on
+ * code was originally written by J. David Blackstone 
+ * in 1999 For CSE 4344 (Network concepts), 
+ * Prof. Zeigler University of Texas at Arlington
  */
-/* This program compiles for Sparc Solaris 2.6.
- * To compile for Linux:
- *  1) Comment out the #include <pthread.h> line.
- *  2) Comment out the line that defines the variable newthread.
- *  3) Comment out the two lines that run pthread_create().
- *  4) Uncomment the line that runs accept_request().
- *  5) Remove -lsocket from the Makefile.
- */
+ 
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -25,6 +20,7 @@
 #include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include "server.h"
 
 #define ISspace(x) isspace((int)(x))
 
@@ -89,40 +85,7 @@ void accept_request(int client)
  }
  url[i] = '\0';
 
- if (strcasecmp(method, "GET") == 0)
- {
-  query_string = url;
-  while ((*query_string != '?') && (*query_string != '\0'))
-   query_string++;
-  if (*query_string == '?')
-  {
-   cgi = 1;
-   *query_string = '\0';
-   query_string++;
-  }
- }
-
- sprintf(path, "htdocs%s", url);
- if (path[strlen(path) - 1] == '/')
-  strcat(path, "index.html");
- if (stat(path, &st) == -1) {
-  while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
-   numchars = get_line(client, buf, sizeof(buf));
-  not_found(client);
- }
- else
- {
-  if ((st.st_mode & S_IFMT) == S_IFDIR)
-   strcat(path, "/index.html");
-  if ((st.st_mode & S_IXUSR) ||
-      (st.st_mode & S_IXGRP) ||
-      (st.st_mode & S_IXOTH)    )
-   cgi = 1;
-  if (!cgi)
-   serve_file(client, path);
-  else
-   execute_cgi(client, path, method, query_string);
- }
+ server_main(client,url,method);
 
  close(client);
 }
@@ -475,7 +438,7 @@ void unimplemented(int client)
 int main(void)
 {
  int server_sock = -1;
- u_short port = 0;
+ u_short port = 32000;
  int client_sock = -1;
  struct sockaddr_in client_name;
  int client_name_len = sizeof(client_name);
