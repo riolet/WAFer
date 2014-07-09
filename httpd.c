@@ -444,8 +444,17 @@ int main(void)
  int client_name_len = sizeof(client_name);
  pthread_t newthread;
 
+ /* You can set the port as an environmental variable */
+ char* pPort;
+ pPort = getenv ("PORT");
+ if (pPort!=NULL)
+	port = (u_short) strtol (pPort,(char **)NULL, 10);
+ printf("Port set to %i\n",port); 
+ 
  server_sock = startup(&port);
  printf("httpd running on port %d\n", port);
+ 
+
 
  while (1)
  {
