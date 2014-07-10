@@ -1,7 +1,7 @@
 all: server
 
-server: httpd.c
-	gcc -W -Wall -pthread -o server httpd.c server.c
+server: nope.c
+	gcc -W -Wall -pthread -o server nopeutils.c nope.c server.c
 
 clean:
 	rm server

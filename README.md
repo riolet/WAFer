@@ -1,7 +1,7 @@
-ritchie
+nope.c
 =======
 
-ritchie is a C language-based software platform for scalable server-side and networking applications. Think node.js for C programmers. It
+nope.c is a C language-based ultra-light software platform for scalable server-side and networking applications. Think node.js for C programmers.
 
 Just put your code inside the function server_main() in server.c and you are good to go.
 
