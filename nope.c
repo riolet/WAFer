@@ -77,7 +77,7 @@ while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf)))
 }
 url[i] = '\0';
 
-server_main(client,url,method);
+server(client,url,method);
 
 close(client);
 }

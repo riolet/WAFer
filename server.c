@@ -1,7 +1,7 @@
 #include "server.h"
 #include "nopeutils.h"
 	
-void server_main(int client, const char * request, const char * method) 
+void server(int client, const char * request, const char * method)
 { 
 	  if (strcmp(request,"/")==0) {	 		
 		char **headers=readHeaders(client);
