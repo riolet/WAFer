@@ -11,43 +11,44 @@
 #include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include "nopeutils.h"
 
 char * getQueryParam(const char * queryString, const char *name) { 
 
 	/* Todo: Will break on abc=1&bc=1. fix */
-	
-  char *pos1 = strstr(queryString, name); 
-  char *value = malloc(4096);
-  int i;
-  
-  if (pos1) { 
-    pos1 += strlen(name); 
 
-    if (*pos1 == '=') { // Make sure there is an '=' where we expect it 
-      pos1++;
-     i=0; 
-      while (*pos1 && *pos1 != '&') { 
-		if (*pos1 == '%') { // Convert it to a single ASCII character and store at our Valueination 
-		  value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]); 
-		  pos1 += 3; 
-		} else if( *pos1=='+' ) { // If it's a '+', store a space at our Valueination 
-		  value[i] = ' '; 
-		  pos1++; 
-		} else { 
-		  value[i] = *pos1++; // Otherwise, just store the character at our Valueination		    
+	char *pos1 = strstr(queryString, name);
+	char *value = malloc(4096);
+	int i;
+
+	if (pos1) {
+		pos1 += strlen(name);
+
+		if (*pos1 == '=') { // Make sure there is an '=' where we expect it
+			pos1++;
+			i=0;
+			while (*pos1 && *pos1 != '&') {
+				if (*pos1 == '%') { // Convert it to a single ASCII character and store at our Valueination
+					value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
+					pos1 += 3;
+				} else if( *pos1=='+' ) { // If it's a '+', store a space at our Valueination
+					value[i] = ' ';
+					pos1++;
+				} else {
+					value[i] = *pos1++; // Otherwise, just store the character at our Valueination
+				}
+				i++;
+			}
+
+			value[i] = '\0';
+			return value;
 		} 
-		i++;
-      } 
 
-      value[i] = '\0';     
-      return value; 
-    } 
+	}
 
-  } 
-
-  strcpy(value, UNDEFINED);	// If param not found, then use default parameter 
-  return value; 
+	strcpy(value, UNDEFINED);	// If param not found, then use default parameter
+	return value;
 } 
 
 char * getQueryPath(const char * queryString)
@@ -64,45 +65,82 @@ char * getQueryPath(const char * queryString)
 	return queryPath;
 }
 
-void headers(int client)
+char ** sendAndReceiveHeaders(int client)
 {
-	read_and_discard_headers(client);
-	write_standard_headers(client);
+	char **headers=readHeaders(client);
+	int i=0;
+	while (headers[i]!=NULL) {
+		printf("Header -> %s",headers[i]);
+		i++;
+	}
+	writeStandardHeaders(client);
+	return headers;
 }
 
 void docwrite(int client,const char* string) 
 {
-	char buf[1024];
+	char buf[MAX_BUFFER_SIZE];
 
-	if (strlen(string)<1024) 
+	if (strlen(string)<MAX_BUFFER_SIZE)
 	{
 		sprintf(buf, "%s", string);
 		send(client, buf, strlen(buf), 0);
 	} else 
 	{
-		write_long_string(client,string);
+		writeLongString(client,string);
 	}
 }
 
-void read_and_discard_headers(client)
-{
-	char buf[1024];
-	int numchars = 1;
 
-	buf[0] = 'A'; buf[1] = '\0';
-	while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
-		numchars = get_line(client, buf, sizeof(buf));
+long nprintf (int client, const char *format, ...) {
+
+		/* Need to figure out a better method for memory management */
+		char *buf = malloc(MAX_BUFFER_SIZE*MAX_DPRINTF_SIZE);
+
+		va_list arg;
+		long done;
+		va_start (arg, format);
+		vsprintf (buf, format, arg);
+		va_end (arg);
+
+		if (strlen(buf)<MAX_BUFFER_SIZE) {
+			done = (int) send(client, buf, strlen(buf), 0);
+		} else {
+			done = writeLongString(client,buf);
+		}
+
+		free(buf);
+		return done;
+
 }
 
-void write_standard_headers(int client)
+
+char ** readHeaders(int client) {
+	char buf[MAX_BUFFER_SIZE];
+	char *headers[MAX_HEADERS];
+	int numchars = 1;
+
+	/* buf[0] = 'A'; buf[1] = '\0'; */
+	int i=0;
+	headers[0]=NULL;
+	while ((numchars > 0) && strcmp("\n", buf)) {
+		numchars = getLine(client, buf, sizeof(buf));
+		headers[i]=malloc(numchars+1);
+		memcpy(headers[i],buf,numchars);
+		i++;
+	}
+	return headers;
+}
+
+void writeStandardHeaders(int client)
 {
-	char buf[1024];
+	char buf[MAX_BUFFER_SIZE];
 
 	strcpy(buf, "HTTP/1.0 200 OK\r\n");
 	send(client, buf, strlen(buf), 0);
 	strcpy(buf, SERVER_STRING);
 	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Content-Type: text/html\r\n");
+	strcpy(buf, "Content-Type: text/html\r\n");
 	send(client, buf, strlen(buf), 0);
 	strcpy(buf, "\r\n");
 	send(client, buf, strlen(buf), 0);
@@ -111,21 +149,21 @@ void write_standard_headers(int client)
 void cat(int client, FILE *pFile)
 {
 	char buf[1024];
-	
+
 	int result = fread (buf,1,1024,pFile);
-	
+
 	while (result!=0) {
 		send(client, buf, result, 0);
 		result = fread (buf,1,1024,pFile);
 	} 
 }
 
-void serve_file(int client, const char *filename, const char * type)
+void serveFile(int client, const char *filename, const char * type)
 {
-	
+
 	FILE *resource = NULL;
 	char buf[1024];
-	
+
 	strcpy(buf, "HTTP/1.0 200 OK\r\n");
 	send(client, buf, strlen(buf), 0);
 	strcpy(buf, SERVER_STRING);
@@ -134,10 +172,10 @@ void serve_file(int client, const char *filename, const char * type)
 	send(client, buf, strlen(buf), 0);
 	strcpy(buf, "\r\n");
 	send(client, buf, strlen(buf), 0);
-		
+
 	resource = fopen(filename, "r");
 	if (resource == NULL)
-		not_found(client);
+		notFound(client);
 	else
 	{
 		cat(client, resource);
@@ -145,19 +183,23 @@ void serve_file(int client, const char *filename, const char * type)
 	fclose(resource);
 }
 
-void write_long_string(int client,const char* longString)
+long writeLongString(int client,const char* longString)
 {
 	char buf[1024];
 	int remain = strlen(longString);
+	long sent=0;
 	while (remain)
 	{
 		int toCpy = remain > sizeof(buf) ? sizeof(buf) : remain;
 		memcpy(buf, longString, toCpy);
 		longString += toCpy;
 		remain -= toCpy;
-		send(client, buf, strlen(buf), 0);
+		sent += send(client, buf, strlen(buf), 0);
 	}
+	return sent;
 }
+
+
 
 /**********************************************************************/
 /* Get a line from a socket, whether the line ends in a newline,
@@ -172,7 +214,7 @@ void write_long_string(int client,const char* longString)
  *             the size of the buffer
  * Returns: the number of bytes stored (excluding null) */
 /**********************************************************************/
-int get_line(int sock, char *buf, int size)
+int getLine(int sock, char *buf, int size)
 {
 	int i = 0;
 	char c = '\0';
@@ -207,7 +249,7 @@ int get_line(int sock, char *buf, int size)
 /**********************************************************************/
 /* Give a client a 404 not found status message. */
 /**********************************************************************/
-void not_found(int client)
+void notFound(int client)
 {
 	char buf[1024];
 

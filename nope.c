@@ -49,7 +49,7 @@ struct stat st;
 int cgi = 0;      /* becomes true if server decides this is a CGI
 		    * program */
 
-numchars = get_line(client, buf, sizeof(buf));
+numchars = getLine(client, buf, sizeof(buf));
 i = 0; j = 0;
 while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
 {
