@@ -1,1 +1,1 @@
-void server_main(int, const char *, const char *);  
+void server(int, const char *, const char *);

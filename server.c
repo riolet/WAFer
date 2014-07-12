@@ -1,9 +1,9 @@
 #include "server.h"
 #include "nopeutils.h"
 	
-void server(int client, const char * request, const char * method)
+void server(int client, const char * queryString, const char * method)
 { 
-	  if (strcmp(request,"/")==0) {	 		
+	  if (strcmp(queryString,"/")==0) {
 		char **headers=readHeaders(client);
 		nprintf(client, "<!DOCTYPE html><HTML><HEAD></HEAD><BODY>");
 		nprintf(client, "<P>Hello World</P>");

@@ -19,7 +19,7 @@ char * getQueryParam(const char * queryString, const char *name) {
 	/* Todo: Will break on abc=1&bc=1. fix */
 
 	char *pos1 = strstr(queryString, name);
-	char *value = malloc(4096);
+	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
 	int i;
 
 	if (pos1) {
@@ -54,14 +54,16 @@ char * getQueryParam(const char * queryString, const char *name) {
 char * getQueryPath(const char * queryString)
 { 
 	char * queryPath;
-	queryPath = malloc(strlen(queryString)+1);
+	queryPath = malloc((strlen(queryString)+1)*sizeof(char));
+	printf("String length %d\n",strlen(queryString));
 	memcpy(queryPath,queryString,strlen(queryString));
-	int i;
-	for (i=0;i<strlen(queryPath) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
+	u_int i;
+	printf("String length %d\n",strlen(queryPath));
+	for (i=0;i<strlen(queryString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
 	}
-	if (queryPath[i] == '?') {
-		queryPath[i] = '\0';
-	}
+
+	queryPath[i] = '\0';
+
 	return queryPath;
 }
 
@@ -95,7 +97,7 @@ void docwrite(int client,const char* string)
 long nprintf (int client, const char *format, ...) {
 
 		/* Need to figure out a better method for memory management */
-		char *buf = malloc(MAX_BUFFER_SIZE*MAX_DPRINTF_SIZE);
+		char *buf = malloc(MAX_BUFFER_SIZE*MAX_DPRINTF_SIZE*sizeof(char));
 
 		va_list arg;
 		long done;
@@ -117,19 +119,32 @@ long nprintf (int client, const char *format, ...) {
 
 char ** readHeaders(int client) {
 	char buf[MAX_BUFFER_SIZE];
-	char *headers[MAX_HEADERS];
-	int numchars = 1;
-
-	/* buf[0] = 'A'; buf[1] = '\0'; */
+	char **headers;
+	int numchars;
 	int i=0;
-	headers[0]=NULL;
+
+	printf("Mallocing %ld \n",sizeof(char*)*MAX_HEADERS);
+	headers=malloc(sizeof(char*)*MAX_HEADERS);
+
+
+	numchars = getLine(client, buf, sizeof(buf));
 	while ((numchars > 0) && strcmp("\n", buf)) {
-		numchars = getLine(client, buf, sizeof(buf));
-		headers[i]=malloc(numchars+1);
+		headers[i]=malloc((numchars+1)*sizeof(char));
 		memcpy(headers[i],buf,numchars);
 		i++;
+		numchars = getLine(client, buf, sizeof(buf));
 	}
+	headers[i]=NULL;
 	return headers;
+}
+
+void freeHeaders(char **headers) {
+	int i=0;
+	while (headers[i]!=NULL) {
+		free(headers[i]);
+		i++;
+	}
+	free(headers);
 }
 
 void writeStandardHeaders(int client)
@@ -190,7 +205,7 @@ long writeLongString(int client,const char* longString)
 	long sent=0;
 	while (remain)
 	{
-		int toCpy = remain > sizeof(buf) ? sizeof(buf) : remain;
+		u_int toCpy = remain > sizeof(buf) ? sizeof(buf) : remain;
 		memcpy(buf, longString, toCpy);
 		longString += toCpy;
 		remain -= toCpy;
@@ -251,24 +266,12 @@ int getLine(int sock, char *buf, int size)
 /**********************************************************************/
 void notFound(int client)
 {
-	char buf[1024];
-
-	sprintf(buf, "HTTP/1.0 404 NOT FOUND\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, SERVER_STRING);
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Content-Type: text/html\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<HTML><TITLE>Not Found</TITLE>\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<BODY><P>The server could not fulfill\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "your request because the resource specified\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "is unavailable or nonexistent.\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "</BODY></HTML>\r\n");
-	send(client, buf, strlen(buf), 0);
+	nprintf(client, "HTTP/1.0 404 NOT FOUND\r\n");
+	nprintf(client, "Content-Type: text/html\r\n");
+	nprintf(client, "\r\n");
+	nprintf(client, "<HTML><TITLE>Not Found</TITLE>\r\n");
+	nprintf(client, "<BODY><P>The server could not fulfill\r\n");
+	nprintf(client, "your request because the resource specified\r\n");
+	nprintf(client, "is unavailable or nonexistent.\r\n");
+	nprintf(client, "</BODY></HTML>\r\n");
 }

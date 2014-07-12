@@ -1,8 +1,9 @@
 char ** readHeaders(int);
+void freeHeaders(char **);
 int getLine(int, char *, int);
 void notFound(int);
 void docwrite(int,const char*);
-long hprintf (int, const char *, ...);
+long nprintf (int, const char *, ...);
 char ** sendAndReceiveHeaders(int);
 char * getQueryPath(const char *);
 char * getQueryParam(const char *, const char *);
