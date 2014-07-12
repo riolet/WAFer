@@ -3,7 +3,7 @@ nope.c
 
 nope.c is a C language-based ultra-light software platform for scalable server-side and networking applications. Think node.js for C programmers.
 
-Just put your code inside the function server_main() in server.c and you are good to go.
+Just put your code inside the function void server(int client, const char * queryString, const char * method) in server.c and you are good to go.
 
 Default port is 32000. Set environment variable 'PORT' to change it.
 
