@@ -1,3 +1,9 @@
+/* This is a Swiss army knife of utilities that make
+ * writing a network application a wee bit easier
+ * Rohana Rezel
+ * Riolet Corporation
+ */
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -14,6 +20,14 @@
 #include <stdarg.h>
 #include "nopeutils.h"
 
+
+/**********************************************************************/
+/* Return the value of a query parameter.
+ * Parameters: the query string
+ *             the name of the parameter
+ * Returns: the value of the query parameter */
+/**********************************************************************/
+
 char * getQueryParam(const char * queryString, const char *name) { 
 
 	/* Todo: Will break on abc=1&bc=1. fix */
@@ -25,18 +39,18 @@ char * getQueryParam(const char * queryString, const char *name) {
 	if (pos1) {
 		pos1 += strlen(name);
 
-		if (*pos1 == '=') { // Make sure there is an '=' where we expect it
+		if (*pos1 == '=') {
 			pos1++;
 			i=0;
 			while (*pos1 && *pos1 != '&') {
-				if (*pos1 == '%') { // Convert it to a single ASCII character and store at our Valueination
+				if (*pos1 == '%') {
 					value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
 					pos1 += 3;
-				} else if( *pos1=='+' ) { // If it's a '+', store a space at our Valueination
+				} else if( *pos1=='+' ) {
 					value[i] = ' ';
 					pos1++;
 				} else {
-					value[i] = *pos1++; // Otherwise, just store the character at our Valueination
+					value[i] = *pos1++;
 				}
 				i++;
 			}
@@ -47,16 +61,23 @@ char * getQueryParam(const char * queryString, const char *name) {
 
 	}
 
-	strcpy(value, UNDEFINED);	// If param not found, then use default parameter
+	strcpy(value, UNDEFINED);
 	return value;
 } 
+
+/**********************************************************************/
+/* Return the query path. For example the query path for
+ * http://nopedotc.com/faq is /faq
+ * Note the / at the beginning
+ * Parameters: the query string
+ * Returns: the query path */
+/**********************************************************************/
 
 char * getQueryPath(const char * queryString)
 { 
 	char * queryPath;
-	queryPath = malloc((strlen(queryString)+1)*sizeof(char));
+	queryPath = dupstr(queryString);
 	printf("String length %d\n",strlen(queryString));
-	memcpy(queryPath,queryString,strlen(queryString));
 	u_int i;
 	printf("String length %d\n",strlen(queryPath));
 	for (i=0;i<strlen(queryString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
@@ -67,6 +88,13 @@ char * getQueryPath(const char * queryString)
 	return queryPath;
 }
 
+/**********************************************************************/
+/* There's a bunch of headers that are exchanged at the beginning
+ * between the web browser and the server. If you are ok with just
+ * using the default, you may use this function
+ * Parameters: the client
+ * Returns: an array of headers */
+/**********************************************************************/
 char ** sendAndReceiveHeaders(int client)
 {
 	char **headers=readHeaders(client);
@@ -79,6 +107,7 @@ char ** sendAndReceiveHeaders(int client)
 	return headers;
 }
 
+/* Deprecated. Use nprintf instead. */
 void docwrite(int client,const char* string) 
 {
 	char buf[MAX_BUFFER_SIZE];
@@ -93,7 +122,9 @@ void docwrite(int client,const char* string)
 	}
 }
 
-
+/* Just like fprintf, but writing to the socket instead of a
+ * file.
+ */
 long nprintf (int client, const char *format, ...) {
 
 		/* Need to figure out a better method for memory management */
@@ -116,6 +147,12 @@ long nprintf (int client, const char *format, ...) {
 
 }
 
+/**********************************************************************/
+/* There's a bunch of headers that browsers send us.
+ * This function reads 'em.
+ * Parameters: the client
+ * Returns: an array of headers */
+/**********************************************************************/
 
 char ** readHeaders(int client) {
 	char buf[MAX_BUFFER_SIZE];
@@ -138,6 +175,7 @@ char ** readHeaders(int client) {
 	return headers;
 }
 
+/* Free thy mallocs */
 void freeHeaders(char **headers) {
 	int i=0;
 	while (headers[i]!=NULL) {
@@ -145,6 +183,13 @@ void freeHeaders(char **headers) {
 		i++;
 	}
 	free(headers);
+}
+
+char * getHeader(char **headers, char *header) {
+	int i;
+	for (i=0;headers[i]!=NULL;i++) {
+		/* Work in Progress */
+	}
 }
 
 void writeStandardHeaders(int client)
@@ -173,6 +218,7 @@ void cat(int client, FILE *pFile)
 	} 
 }
 
+/* Serve and entire file. */
 void serveFile(int client, const char *filename, const char * type)
 {
 
@@ -198,15 +244,17 @@ void serveFile(int client, const char *filename, const char * type)
 	fclose(resource);
 }
 
+/* Write strings that are two big for our buffer */
 long writeLongString(int client,const char* longString)
 {
-	char buf[1024];
-	int remain = strlen(longString);
-	long sent=0;
+	char buf[MAX_BUFFER_SIZE];
+	u_int maxSize = sizeof(buf);
+	u_int remain = strlen(longString);
+	u_long sent=0;
 	while (remain)
 	{
-		u_int toCpy = remain > sizeof(buf) ? sizeof(buf) : remain;
-		memcpy(buf, longString, toCpy);
+		u_int toCpy = remain > maxSize ? maxSize : remain;
+		strncpy(buf, longString, toCpy);
 		longString += toCpy;
 		remain -= toCpy;
 		sent += send(client, buf, strlen(buf), 0);
@@ -275,3 +323,151 @@ void notFound(int client)
 	nprintf(client, "is unavailable or nonexistent.\r\n");
 	nprintf(client, "</BODY></HTML>\r\n");
 }
+
+char * dupstr (const char *s)
+{
+  size_t len = strlen (s) + 1;
+  char *newstr = malloc (len*sizeof(char));
+
+  if (newstr == NULL)
+    return NULL;
+
+  memcpy (newstr, s, len);
+  newstr[len]=NULL;
+  return newstr;
+}
+
+void mvhpen8(int client, const char * title, const char * head) {
+	mvhpOpen(client,"en","utf-8",title,head);
+}
+void mvhpOpen(int client, const char * language,const char * charset, const char * title, const char * head){
+	nprintf(client,"<!DOCTYPE html>\r\n<html lang=\"%s\">\r\n  <head>\r\n    <meta charset=\"%s\">\r\n    <title>%s</title>\r\n %s</head>\r\n  <body> \r\n",language,charset,title,head);
+}
+
+void hClose(int client){
+	nprintf(client,"</body>\r\n</html>");
+}
+
+void hto(int client, const char * tag, const char *attribs, ...) {
+	nprintf(client,"<%s ",tag);
+	va_list arg;
+	va_start (arg, attribs);
+	attrprintf (client, attribs, arg);
+	va_end (arg);
+	nprintf(client," >",tag);
+}
+
+void htc(int client, const char * tag) {
+	nprintf(client,"</div>");
+}
+
+void htoc(int client, const char *tag,const char *text,const char *attribs, ...) {
+	nprintf(client,"<%s ",tag);
+	va_list arg;
+	va_start (arg, attribs);
+	attrprintf (client, attribs, arg);
+	va_end (arg);
+	nprintf(client," >");
+	nprintf(client,"%s",text);
+	nprintf(client,"</%s>",tag);
+}
+
+void hts(int client, const char *tag,const char *attribs, ...) {
+	nprintf(client,"<%s ",tag);
+	va_list arg;
+	va_start (arg, attribs);
+	attrprintf (client, attribs, arg);
+	va_end (arg);
+	nprintf(client," />");
+}
+
+char * hscan(int client, const char * reqStr, const char *msg,...) {
+	char * qpath=getQueryPath(reqStr);
+	char * qparam=getQueryParam(reqStr,"q");
+	hto(client,"div","");
+	hto(client,"form","action",qpath);
+	nprintf(client,"%s",msg);
+	hts(client,"input","type,name","text","q");
+	hts(client,"input","type","submit");
+	htc(client,"form");
+	htc(client,"div");
+
+	return qparam;
+}
+
+int attrprintf(int client, const char *attribs, va_list args) {
+
+	char buf[MAX_BUFFER_SIZE]; /* TODO: Dynamic allocation */
+
+	int attrLen=strlen(attribs);
+
+	if (attrLen==0) {
+		return true;
+	} else {
+		printf ("Attrib string length %d\n",attrLen);
+	}
+
+	int i;
+	int j=0;
+	for (i=0;i<=attrLen;i++) {
+		if (i<attrLen) {
+			if (attribs[i] != ',') {
+				buf[j]=attribs[i];
+				j++;
+				continue;
+			}
+		}
+	    buf[j]=NULL;
+		printf("buf %s\n",buf);
+	    j=0;
+		char * v = va_arg(args, char *);
+		nprintf(client," %s=\"%s\" ",buf,v);
+	}
+
+	return true;
+}
+
+bool route(Request request, const char * path) {
+	char * queryPath = getQueryPath(request.reqStr);
+	if (strcmp(queryPath,path)==0) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool routeh(Request request, const char * path) {
+	char * queryPath = getQueryPath(request.reqStr);
+	if (strcmp(queryPath,path)==0) {
+		char ** headers = sendAndReceiveHeaders(request.client);
+		if (headers)
+			freeHeaders(headers);
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool routef(Request request, const char * path, void (* function)(int,char *, char*)) {
+	char * queryPath = getQueryPath(request.reqStr);
+	if (strcmp(queryPath,path)==0) {
+		function(request.client,request.reqStr,request.method);
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool routefh(Request request, const char * path, void (* function)(int,char *, char*)) {
+	char * queryPath = getQueryPath(request.reqStr);
+	if (strcmp(queryPath,path)==0) {
+		char ** headers = sendAndReceiveHeaders(request.client);
+		function(request.client,request.reqStr,request.method);
+		if (headers)
+			freeHeaders(headers);
+		return true;
+	} else {
+		return false;
+	}
+}
+

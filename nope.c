@@ -71,7 +71,14 @@ void accept_request(int client)
 	}
 	url[i] = '\0';
 
-	server(client,url,method);
+	Request request;
+	request.client=client;
+	request.reqStr=url;
+	request.method=method;
+
+	/*server(client,url,method);*/
+
+	server(request);
 
 	close(client);
 }
@@ -192,7 +199,7 @@ void unimplemented(int client)
 int main(void)
 {
 	int server_sock = -1;
-	u_short port = 32000;
+	u_short port = 4242;
 	int client_sock = -1;
 	struct sockaddr_in client_name;
 	int client_name_len = sizeof(client_name);
