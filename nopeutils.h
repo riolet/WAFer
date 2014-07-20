@@ -32,7 +32,7 @@ char * hscan(int client, const char * reqStr, const char *msg,...);
 #define UNDEFINED "VALUE_UNDEFINED"
 #define MAX_HEADERS 1024
 #define MAX_BUFFER_SIZE 1024
-#define MAX_DPRINTF_SIZE 8
+#define MAX_DPRINTF_SIZE 32
 #define true 1
 #define false 0
 

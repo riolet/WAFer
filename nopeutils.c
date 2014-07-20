@@ -77,9 +77,7 @@ char * getQueryPath(const char * queryString)
 { 
 	char * queryPath;
 	queryPath = dupstr(queryString);
-	printf("String length %d\n",strlen(queryString));
 	u_int i;
-	printf("String length %d\n",strlen(queryPath));
 	for (i=0;i<strlen(queryString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
 	}
 
@@ -160,14 +158,16 @@ char ** readHeaders(int client) {
 	int numchars;
 	int i=0;
 
-	printf("Mallocing %ld \n",sizeof(char*)*MAX_HEADERS);
+	/* printf("Mallocing %ld \n",sizeof(char*)*MAX_HEADERS); */
 	headers=malloc(sizeof(char*)*MAX_HEADERS);
 
 
 	numchars = getLine(client, buf, sizeof(buf));
 	while ((numchars > 0) && strcmp("\n", buf)) {
+		/* printf("Numchars %d %s\n",numchars,buf); */
 		headers[i]=malloc((numchars+1)*sizeof(char));
 		memcpy(headers[i],buf,numchars);
+		headers[i][numchars]=NULL;
 		i++;
 		numchars = getLine(client, buf, sizeof(buf));
 	}
@@ -250,15 +250,18 @@ long writeLongString(int client,const char* longString)
 	char buf[MAX_BUFFER_SIZE];
 	u_int maxSize = sizeof(buf);
 	u_int remain = strlen(longString);
+
 	u_long sent=0;
 	while (remain)
 	{
+		/* printf("To send %d\n",remain); */
 		u_int toCpy = remain > maxSize ? maxSize : remain;
 		strncpy(buf, longString, toCpy);
 		longString += toCpy;
 		remain -= toCpy;
-		sent += send(client, buf, strlen(buf), 0);
+		sent += send(client, buf, toCpy, 0);
 	}
+	/* printf("Sent  %d\n",sent); */
 	return sent;
 }
 
@@ -358,7 +361,7 @@ void hto(int client, const char * tag, const char *attribs, ...) {
 }
 
 void htc(int client, const char * tag) {
-	nprintf(client,"</div>");
+	nprintf(client,"</%s>",tag);
 }
 
 void htoc(int client, const char *tag,const char *text,const char *attribs, ...) {
@@ -384,14 +387,11 @@ void hts(int client, const char *tag,const char *attribs, ...) {
 char * hscan(int client, const char * reqStr, const char *msg,...) {
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
-	hto(client,"div","");
 	hto(client,"form","action",qpath);
 	nprintf(client,"%s",msg);
 	hts(client,"input","type,name","text","q");
 	hts(client,"input","type","submit");
 	htc(client,"form");
-	htc(client,"div");
-
 	return qparam;
 }
 
@@ -404,7 +404,7 @@ int attrprintf(int client, const char *attribs, va_list args) {
 	if (attrLen==0) {
 		return true;
 	} else {
-		printf ("Attrib string length %d\n",attrLen);
+		/* printf ("Attrib string length %d\n",attrLen); */
 	}
 
 	int i;
