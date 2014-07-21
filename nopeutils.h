@@ -1,6 +1,45 @@
 #ifndef NOPEUTILS_H_
 #define NOPEUTILS_H_
 
+#define STR(X) #X
+#define WSPC " "
+#define CRLF "\r\n"
+#define ATTR(key,value) STR(key) STR(=) STR(value)
+
+#define LT(tag) STR(<) STR(tag) WSPC	/*<tag */
+#define LTA(tag,attributes) STR(<) STR(tag) WSPC STR(attributes) WSPC	/*<tag */
+#define GT STR(>)						/*<*/
+
+
+#define OTAG(tag) LT(tag) GT	/*<tag>*/
+#define OTAGA(tag,attributes) LTA(tag,attributes) GT	/*<tag attributes>*/
+#define CTAG(tag) STR(</) STR(tag) GT	/*</tag>*/
+
+#define STAG(tag,attributes) LTA(tag,attributes) WSPC STR(/>)	/*<tag attributes /> */
+
+#define QTAG(tag,text) OTAG(tag) text CTAG(tag)	/*<tag> text </tag>*/
+#define QTAGA(tag,attributes,text) OTAGA(tag,attributes) text CTAG(tag)	/*<tag attributes> text </tag>*/
+
+/* Extensions */
+#define QLINK(url,text) QTAGA(a,href=url,text)
+#define QLINKA(url,attributes,text) QTAGA(a,href=url attributes,text)
+#define QIMG(srcurl) STAG(img,src=srcurl)
+#define QIMGA(srcurl) STAG(img,src=srcurl)
+/* End extensions */
+
+#define MVHP_OPEN(l,c,t,h)  LT(!DOCTYPE html) GT CRLF\
+							LT(html) STR(lang=l) GT CRLF\
+									OTAG(head)\
+										STAG(meta, charset=c) CRLF\
+										QTAG(title,t) CRLF\
+										h CRLF\
+									CTAG(head) CRLF\
+									OTAG(body) CRLF
+
+#define MVHPEN8(t,h) MVHP_OPEN("en","utf-8",t,h)
+
+#define HP_CLOSE CRLF CTAG(body) CRLF CTAG(html)
+
 #include <stdarg.h>
 char ** readHeaders(int);
 void freeHeaders(char **);
@@ -16,15 +55,6 @@ long writeLongString(int,const char*);
 void serveFile(int, const char *, const char *);
 char * dupstr (const char *);
 
-void mvhpen8(int client, const char * title, const char * head);
-void mvhpOpen(int client, const char * language,const char * charset, const char * title, const char * head);
-void hClose(int client);
-void hto(int client, const char * tag, const char *attribs, ...);
-void htc(int client, const char * tag);
-void htoc(int client, const char *tag,const char *text,const char *attribs, ...);
-void hts(int client, const char *tag,const char *attribs, ...);
-
-int attrprintf(int client, const char *attribs, va_list args);
 char * hscan(int client, const char * reqStr, const char *msg,...);
 
 #define SERVER_STRING "Server: nope.chttpd/0.1.0\r\n"

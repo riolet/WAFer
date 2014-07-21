@@ -105,23 +105,10 @@ char ** sendAndReceiveHeaders(int client)
 	return headers;
 }
 
-/* Deprecated. Use nprintf instead. */
-void docwrite(int client,const char* string) 
-{
-	char buf[MAX_BUFFER_SIZE];
-
-	if (strlen(string)<MAX_BUFFER_SIZE)
-	{
-		sprintf(buf, "%s", string);
-		send(client, buf, strlen(buf), 0);
-	} else 
-	{
-		writeLongString(client,string);
-	}
-}
-
 /* Just like fprintf, but writing to the socket instead of a
  * file.
+ * Parameters: the client, format
+ * Returns: the number of characters printed
  */
 long nprintf (int client, const char *format, ...) {
 
@@ -340,91 +327,17 @@ char * dupstr (const char *s)
   return newstr;
 }
 
-void mvhpen8(int client, const char * title, const char * head) {
-	mvhpOpen(client,"en","utf-8",title,head);
-}
-void mvhpOpen(int client, const char * language,const char * charset, const char * title, const char * head){
-	nprintf(client,"<!DOCTYPE html>\r\n<html lang=\"%s\">\r\n  <head>\r\n    <meta charset=\"%s\">\r\n    <title>%s</title>\r\n %s</head>\r\n  <body> \r\n",language,charset,title,head);
-}
-
-void hClose(int client){
-	nprintf(client,"</body>\r\n</html>");
-}
-
-void hto(int client, const char * tag, const char *attribs, ...) {
-	nprintf(client,"<%s ",tag);
-	va_list arg;
-	va_start (arg, attribs);
-	attrprintf (client, attribs, arg);
-	va_end (arg);
-	nprintf(client," >",tag);
-}
-
-void htc(int client, const char * tag) {
-	nprintf(client,"</%s>",tag);
-}
-
-void htoc(int client, const char *tag,const char *text,const char *attribs, ...) {
-	nprintf(client,"<%s ",tag);
-	va_list arg;
-	va_start (arg, attribs);
-	attrprintf (client, attribs, arg);
-	va_end (arg);
-	nprintf(client," >");
-	nprintf(client,"%s",text);
-	nprintf(client,"</%s>",tag);
-}
-
-void hts(int client, const char *tag,const char *attribs, ...) {
-	nprintf(client,"<%s ",tag);
-	va_list arg;
-	va_start (arg, attribs);
-	attrprintf (client, attribs, arg);
-	va_end (arg);
-	nprintf(client," />");
-}
-
 char * hscan(int client, const char * reqStr, const char *msg,...) {
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
-	hto(client,"form","action",qpath);
-	nprintf(client,"%s",msg);
-	hts(client,"input","type,name","text","q");
-	hts(client,"input","type","submit");
-	htc(client,"form");
+	nprintf(client,
+			OTAGA(form,action="%s")
+				"%s"
+				STAG(input,type="text" name="q")
+				STAG(input,type="submit")
+			CTAG(form)
+			,qpath,msg);
 	return qparam;
-}
-
-int attrprintf(int client, const char *attribs, va_list args) {
-
-	char buf[MAX_BUFFER_SIZE]; /* TODO: Dynamic allocation */
-
-	int attrLen=strlen(attribs);
-
-	if (attrLen==0) {
-		return true;
-	} else {
-		/* printf ("Attrib string length %d\n",attrLen); */
-	}
-
-	int i;
-	int j=0;
-	for (i=0;i<=attrLen;i++) {
-		if (i<attrLen) {
-			if (attribs[i] != ',') {
-				buf[j]=attribs[i];
-				j++;
-				continue;
-			}
-		}
-	    buf[j]=NULL;
-		printf("buf %s\n",buf);
-	    j=0;
-		char * v = va_arg(args, char *);
-		nprintf(client," %s=\"%s\" ",buf,v);
-	}
-
-	return true;
 }
 
 bool route(Request request, const char * path) {
