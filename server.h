@@ -1,1 +1,1 @@
-void server(int, const char *, const char *);
+void server(Request request);
