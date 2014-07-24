@@ -25,7 +25,7 @@
 
 #define ISspace(x) isspace((int)(x))
 
-void accept_request(int);
+static void * accept_request(void *arg);
 void bad_request(int);
 void cannot_execute(int);
 void error_die(const char *);
@@ -37,7 +37,7 @@ void unimplemented(int);
  * return.  Process the request appropriately.
  * Parameters: the socket connected to the client */
 /**********************************************************************/
-void accept_request(int client)
+static void * accept_request(void *arg)
 {
 	char buf[1024];
 	u_int numchars;
@@ -45,19 +45,27 @@ void accept_request(int client)
 	char url[1024];
 	size_t i, j;
 
+	int client = *(int*)arg;
+
 	numchars = getLine(client, buf, sizeof(buf));
+	if (numchars==0) {
+		printf("Keep alive null packet. Ignore %d\n",numchars);
+		return 1;
+	}
+
 	i = 0; j = 0;
 	while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
 	{
 		method[i] = buf[j];
 		i++; j++;
+
 	}
 	method[i] = '\0';
 
 	if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
 	{
 		unimplemented(client);
-		return;
+		return 1;
 	}
 
 
@@ -202,7 +210,7 @@ int main(void)
 	u_short port = 4242;
 	int client_sock = -1;
 	struct sockaddr_in client_name;
-	int client_name_len = sizeof(client_name);
+	socklen_t client_name_len = sizeof(client_name);
 	pthread_t newthread;
 
 	/* You can set the port as an environmental variable */
@@ -222,10 +230,12 @@ int main(void)
 		client_sock = accept(server_sock,
 				(struct sockaddr *)&client_name,
 				&client_name_len);
-		if (client_sock == -1)
-			error_die("accept");
+		if (client_sock == -1) {
+			printf("We have hit an error at accept\n");
+			/* error_die("accept"); */
+		}
 		/* accept_request(client_sock); */
-		if (pthread_create(&newthread , NULL, accept_request, client_sock) != 0)
+		if (pthread_create(&newthread , NULL, &accept_request, &client_sock) != 0)
 			perror("pthread_create");
 	}
 

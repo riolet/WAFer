@@ -73,12 +73,12 @@ char * getQueryParam(const char * queryString, const char *name) {
  * Returns: the query path */
 /**********************************************************************/
 
-char * getQueryPath(const char * queryString)
+char * getQueryPath(const char * reqString)
 { 
 	char * queryPath;
-	queryPath = dupstr(queryString);
+	queryPath = dupstr(reqString);
 	u_int i;
-	for (i=0;i<strlen(queryString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
+	for (i=0;i<strlen(reqString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
 	}
 
 	queryPath[i] = '\0';
@@ -121,11 +121,13 @@ long nprintf (int client, const char *format, ...) {
 		vsprintf (buf, format, arg);
 		va_end (arg);
 
+		/* printf("Buffer length %d",strlen(buf)); */
 		if (strlen(buf)<MAX_BUFFER_SIZE) {
 			done = (int) send(client, buf, strlen(buf), 0);
 		} else {
 			done = writeLongString(client,buf);
 		}
+
 
 		free(buf);
 		return done;
@@ -205,6 +207,39 @@ void cat(int client, FILE *pFile)
 	} 
 }
 
+/* Serve downloadable file. */
+void serveDownloadableFile(int client, const char *filename, const char *displayFilename, const char * type)
+{
+
+	FILE *resource = NULL;
+	char buf[1024];
+
+	strcpy(buf, "HTTP/1.0 200 OK\r\n");
+	send(client, buf, strlen(buf), 0);
+
+	strcpy(buf, SERVER_STRING);
+	send(client, buf, strlen(buf), 0);
+
+	sprintf(buf, "Content-Type: %s\r\n",type);
+	send(client, buf, strlen(buf), 0);
+	strcpy(buf, "\r\n");
+
+	sprintf(buf, "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
+	send(client, buf, strlen(buf), 0);
+	strcpy(buf, "\r\n");
+
+	send(client, buf, strlen(buf), 0);
+
+	resource = fopen(filename, "r");
+	if (resource == NULL)
+		notFound(client);
+	else
+	{
+		cat(client, resource);
+	}
+	fclose(resource);
+}
+
 /* Serve and entire file. */
 void serveFile(int client, const char *filename, const char * type)
 {
@@ -214,11 +249,14 @@ void serveFile(int client, const char *filename, const char * type)
 
 	strcpy(buf, "HTTP/1.0 200 OK\r\n");
 	send(client, buf, strlen(buf), 0);
+
 	strcpy(buf, SERVER_STRING);
 	send(client, buf, strlen(buf), 0);
+
 	sprintf(buf, "Content-Type: %s\r\n",type);
 	send(client, buf, strlen(buf), 0);
 	strcpy(buf, "\r\n");
+
 	send(client, buf, strlen(buf), 0);
 
 	resource = fopen(filename, "r");
@@ -323,20 +361,32 @@ char * dupstr (const char *s)
     return NULL;
 
   memcpy (newstr, s, len);
-  newstr[len]=NULL;
   return newstr;
 }
 
-char * hscan(int client, const char * reqStr, const char *msg,...) {
+char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr) {
+	char * qpath=getQueryPath(reqStr);
+	char * qparam=getQueryParam(reqStr,"q");
+	if (strcmp(qparam,UNDEFINED)==0) {
+		nprintf(client,
+				OTAGA(form,action="%s")
+					"%s%s"
+					STAG(input,type="submit")
+				CTAG(form)
+				,qpath,msg,inputstr);
+	}
+	return qparam;
+}
+
+char * _hscan(int client, const char * reqStr, const char *msg,const char * inputstr) {
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
 	nprintf(client,
 			OTAGA(form,action="%s")
-				"%s"
-				STAG(input,type="text" name="q")
+				"%s%s"
 				STAG(input,type="submit")
 			CTAG(form)
-			,qpath,msg);
+			,qpath,msg,inputstr);
 	return qparam;
 }
 
@@ -383,4 +433,3 @@ bool routefh(Request request, const char * path, void (* function)(int,char *, c
 		return false;
 	}
 }
-
