@@ -57,7 +57,7 @@ void unimplemented(int client)
 	STATIC_SEND(client, "<HTML><HEAD><TITLE>Method Not Implemented\r\n", 0);
 	STATIC_SEND(client, "</TITLE></HEAD>\r\n", 0);
 	STATIC_SEND(client, "<BODY><P>HTTP request method not supported.\r\n", 0);
-	STATIC_SEND(client, "</BODY></HTML>\r\n", 0);
+	STATIC_SEND(client, "</P></BODY></HTML>\r\n", 0);
 }
 
 void rio_readinitb(rio_t *rp, int fd){

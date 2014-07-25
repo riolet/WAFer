@@ -338,7 +338,7 @@ void notFound(int client)
 	nprintf(client, "<BODY><P>The server could not fulfill\r\n");
 	nprintf(client, "your request because the resource specified\r\n");
 	nprintf(client, "is unavailable or nonexistent.\r\n");
-	nprintf(client, "</BODY></HTML>\r\n");
+	nprintf(client, "</P></BODY></HTML>\r\n");
 }
 
 char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr) {
