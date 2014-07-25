@@ -29,11 +29,17 @@
 
 char * getQueryParam(const char * queryString, const char *name) { 
 
-	/* Todo: Will break on abc=1&bc=1. fix */
-
 	char *pos1 = strstr(queryString, name);
 	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
 	int i;
+
+    int queryStringPos = pos1-queryString;
+    char *pos2 = pos1;
+    while (queryStringPos > 0 && queryString[queryStringPos-1] != '&') {
+        pos1 = strstr(pos2, name);
+        queryStringPos += pos2-pos1;
+        pos2 += strlen(name);
+    }
 
 	if (pos1) {
 		pos1 += strlen(name);
