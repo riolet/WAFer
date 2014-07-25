@@ -274,10 +274,10 @@ ssize_t writeLongString(int client,const char* longString, size_t len)
 		/* printf("To send %d\n",remain); */
 		size_t toCpy = remain > MAX_BUFFER_SIZE ? MAX_BUFFER_SIZE : remain;
 		ssize_t sent_once = send(client, longString, toCpy, 0);
-		if (sent_once < 0) return -1;
+		if (sent_once <= 0) return -1;
 		sent += sent_once;
-		longString += toCpy;
-		remain -= toCpy;
+		longString += sent_once;
+		remain -= sent_once;
 	}
 	/* printf("Sent  %d\n",sent); */
 	return sent;
