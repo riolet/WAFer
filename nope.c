@@ -282,7 +282,8 @@ void process(int fd, struct sockaddr_in *clientaddr){
 int main(void){
 	int i;
     struct sockaddr_in clientaddr;
-    int default_port = 9999,
+    int default_port = 4242,
+    	nChildren = 15,
         listenfd,
         connfd;
 
@@ -292,6 +293,11 @@ int main(void){
 
 	if (pPort!=NULL)
 		default_port = (u_short) strtol (pPort,(char **)NULL, 10);
+
+    char* pChildren = getenv ("CHILDREN");
+
+	if (pChildren!=NULL)
+		nChildren = (u_short) strtol (pChildren,(char **)NULL, 10);
 
     listenfd = open_listenfd(default_port);
     if (listenfd > 0) {
@@ -304,7 +310,7 @@ int main(void){
     // won't kill the whole process.
     signal(SIGPIPE, SIG_IGN);
 
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < nChildren; i++) {
         int pid = fork();
         if (pid == 0) {         //  child
             while(1){
