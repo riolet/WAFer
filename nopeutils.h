@@ -90,9 +90,9 @@ struct struct_request {
 };
 
 bool route(Request request, const char * path);
-bool routef(Request request, const char * path, void (* function)(int,char *, char*));
+bool routef(Request request, const char * path, void (* function)(int, const char *, const char*));
 bool routeh(Request request, const char * path);
-bool routefh(Request request, const char * path, void (* function)(int,char *, char*));
+bool routefh(Request request, const char * path, void (* function)(int, const char *, const char*));
 
 
 #endif /* NOPEUTILS_H_ */

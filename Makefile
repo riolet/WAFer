@@ -5,7 +5,7 @@ AR=ar
 CFLAGS=-W -Wall -O2
 LIBNOPE_OBJ=nope.o nopeutils.o
 LIBNOPE=libnope.a
-MODULES=server
+MODULES=server factor
 
 all: $(MODULES)
 

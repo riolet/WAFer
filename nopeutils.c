@@ -398,7 +398,7 @@ bool routeh(Request request, const char * path) {
 	}
 }
 
-bool routef(Request request, const char * path, void (* function)(int,char *, char*)) {
+bool routef(Request request, const char * path, void (* function)(int,const char *, const char*)) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
 		free(queryPath);
@@ -410,7 +410,7 @@ bool routef(Request request, const char * path, void (* function)(int,char *, ch
 	}
 }
 
-bool routefh(Request request, const char * path, void (* function)(int,char *, char*)) {
+bool routefh(Request request, const char * path, void (* function)(int,const char *, const char*)) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
 		free(queryPath);
