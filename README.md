@@ -10,5 +10,6 @@ Default port is 4242. Set environment variable 'PORT' to change it.
 That's really it. The source comes with a simple example that prints "Hello World" to get your started.
 
 Acknowledgements:
+
 1. [J. David Blackstone](http://sourceforge.net/u/jdavidb/profile/) and [Feng Shen](https://github.com/shenfeng), whose web servers have been repurposed to build this platform.
 
