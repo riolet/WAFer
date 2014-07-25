@@ -188,8 +188,8 @@ char * getHeader(char **headers, char *header) {
         current_header = headers[i];
         for (j=0;j<strlen(header);j++) {
             if ((matching_header = strstr(current_header, header))) {
-                value = matching_header+strlen(header)+1;
-                while (*value == ' ')
+                value = matching_header+strlen(header);
+                while (*value == ' ' || *value == ':')
                     value = value+1;
                 return value;
             }
