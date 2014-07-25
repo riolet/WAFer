@@ -46,6 +46,7 @@
 #define STATIC_SEND(_socket, _str, _flags) send(_socket, _str, sizeof(_str)-1, _flags)
 
 #include <stdarg.h>
+#include <stdlib.h>
 char ** readHeaders(int);
 void freeHeaders(char **);
 int getLine(int, char *, int);
@@ -56,7 +57,7 @@ char ** sendAndReceiveHeaders(int);
 char * getQueryPath(const char *);
 char * getQueryParam(const char *, const char *);
 void writeStandardHeaders(int);
-long writeLongString(int,const char*);
+ssize_t writeLongString(int,const char*, size_t);
 void serveFile(int, const char *, const char *);
 char * dupstr (const char *);
 

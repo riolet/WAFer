@@ -111,26 +111,34 @@ char ** sendAndReceiveHeaders(int client)
  */
 long nprintf (int client, const char *format, ...) {
 
-		/* Need to figure out a better method for memory management */
-		char *buf = malloc(MAX_BUFFER_SIZE*MAX_DPRINTF_SIZE*sizeof(char));
+		/* initial buffer large enough for most cases, will resize if required */
+		char *buf = malloc(MAX_BUFFER_SIZE);
+		int len;
 
 		va_list arg;
 		long done;
 		va_start (arg, format);
-		vsprintf (buf, format, arg);
+		len = vsnprintf (buf, MAX_BUFFER_SIZE, format, arg);
 		va_end (arg);
 
-		/* printf("Buffer length %d",strlen(buf)); */
-		if (strlen(buf)<MAX_BUFFER_SIZE) {
-			done = (int) send(client, buf, strlen(buf), 0);
-		} else {
-			done = writeLongString(client,buf);
+		if (len > MAX_BUFFER_SIZE) {
+			/* buffer size was not enough */
+			free(buf);
+			buf = malloc(len+1);
+			va_start (arg, format);
+			vsnprintf (buf, len+1, format, arg);
+			va_end (arg);
 		}
 
+		/* printf("Buffer length %d",strlen(buf)); */
+		if (len<MAX_BUFFER_SIZE) {
+			done = (int) send(client, buf, len, 0);
+		} else {
+			done = writeLongString(client,buf,len);
+		}
 
 		free(buf);
 		return done;
-
 }
 
 /**********************************************************************/
@@ -256,21 +264,20 @@ void serveFile(int client, const char *filename, const char * type)
 }
 
 /* Write strings that are two big for our buffer */
-long writeLongString(int client,const char* longString)
+ssize_t writeLongString(int client,const char* longString, size_t len)
 {
-	char buf[MAX_BUFFER_SIZE];
-	u_int maxSize = sizeof(buf);
-	u_int remain = strlen(longString);
+	size_t remain = len;
+	size_t sent=0;
 
-	u_long sent=0;
 	while (remain)
 	{
 		/* printf("To send %d\n",remain); */
-		u_int toCpy = remain > maxSize ? maxSize : remain;
-		strncpy(buf, longString, toCpy);
+		size_t toCpy = remain > MAX_BUFFER_SIZE ? MAX_BUFFER_SIZE : remain;
+		ssize_t sent_once = send(client, longString, toCpy, 0);
+		if (sent_once < 0) return -1;
+		sent += sent_once;
 		longString += toCpy;
 		remain -= toCpy;
-		sent += send(client, buf, toCpy, 0);
 	}
 	/* printf("Sent  %d\n",sent); */
 	return sent;
