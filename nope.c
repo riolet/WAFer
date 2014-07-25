@@ -1,179 +1,47 @@
-/* ritchie is a C language-based software platform 
- * for scalable server-side and networking applications.
- * Think node.js for C programmers.
- * By Rohana Rezel of Riolet Corporation based on
- * code was originally written by J. David Blackstone
- * in 1999 For CSE 4344 (Network concepts),
- * Prof. Zeigler University of Texas at Arlington
- */
-
-#include <stdio.h>
-#include <sys/socket.h>
-#include <sys/types.h>
+#include <arpa/inet.h>          /* inet_ntoa */
+#include <signal.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <time.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/sendfile.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <strings.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <pthread.h>
-#include <sys/wait.h>
-#include <stdlib.h>
+
 #include "server.h"
 #include "nopeutils.h"
 
 #define ISspace(x) isspace((int)(x))
 
-static void * accept_request(void *arg);
-void bad_request(int);
-void cannot_execute(int);
-void error_die(const char *);
-int startup(u_short *);
-void unimplemented(int);
+#define LISTENQ  1024  /* second argument to listen() */
+#define MAXLINE 1024   /* max length of a line */
+#define RIO_BUFSIZE 1024
 
-/**********************************************************************/
-/* A request has caused a call to accept() on the server port to
- * return.  Process the request appropriately.
- * Parameters: the socket connected to the client */
-/**********************************************************************/
-static void * accept_request(void *arg)
-{
-	char buf[1024];
-	u_int numchars;
-	char method[255];
-	char url[1024];
-	size_t i, j;
+typedef struct {
+    int rio_fd;                 /* descriptor for this buf */
+    int rio_cnt;                /* unread byte in this buf */
+    char *rio_bufptr;           /* next unread byte in this buf */
+    char rio_buf[RIO_BUFSIZE];  /* internal buffer */
+} rio_t;
 
-	int client = *(int*)arg;
+/* Simplifies calls to bind(), connect(), and accept() */
+typedef struct sockaddr SA;
 
-	numchars = getLine(client, buf, sizeof(buf));
-	if (numchars==0) {
-		printf("Keep alive null packet. Ignore %d\n",numchars);
-		return 1;
-	}
+typedef struct {
+    char filename[512];
+    off_t offset;              /* for support Range */
+    size_t end;
+} http_request;
 
-	i = 0; j = 0;
-	while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
-	{
-		method[i] = buf[j];
-		i++; j++;
-
-	}
-	method[i] = '\0';
-
-	if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
-	{
-		unimplemented(client);
-		return 1;
-	}
-
-
-	i = 0;
-	while (ISspace(buf[j]) && (j < sizeof(buf)))
-		j++;
-	while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf)))
-	{
-		url[i] = buf[j];
-		i++; j++;
-	}
-	url[i] = '\0';
-
-	Request request;
-	request.client=client;
-	request.reqStr=url;
-	request.method=method;
-
-	/*server(client,url,method);*/
-
-	server(request);
-
-	close(client);
-}
-
-/**********************************************************************/
-/* Inform the client that a request it has made has a problem.
- * Parameters: client socket */
-/**********************************************************************/
-void bad_request(int client)
-{
-	char buf[1024];
-
-	sprintf(buf, "HTTP/1.0 400 BAD REQUEST\r\n");
-	send(client, buf, sizeof(buf), 0);
-	sprintf(buf, "Content-type: text/html\r\n");
-	send(client, buf, sizeof(buf), 0);
-	sprintf(buf, "\r\n");
-	send(client, buf, sizeof(buf), 0);
-	sprintf(buf, "<P>Your browser sent a bad request, ");
-	send(client, buf, sizeof(buf), 0);
-	sprintf(buf, "such as a POST without a Content-Length.\r\n");
-	send(client, buf, sizeof(buf), 0);
-}
-
-/**********************************************************************/
-/* Inform the client that a CGI script could not be executed.
- * Parameter: the client socket descriptor. */
-/**********************************************************************/
-void cannot_execute(int client)
-{
-	char buf[1024];
-
-	sprintf(buf, "HTTP/1.0 500 Internal Server Error\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Content-type: text/html\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<P>Error prohibited CGI execution.\r\n");
-	send(client, buf, strlen(buf), 0);
-}
-
-/**********************************************************************/
-/* Print out an error message with perror() (for system errors; based
- * on value of errno, which indicates system call errors) and exit the
- * program indicating an error. */
-/**********************************************************************/
-void error_die(const char *sc)
-{
-	perror(sc);
-	exit(1);
-}
-
-
-/**********************************************************************/
-/* This function starts the process of listening for web connections
- * on a specified port.  If the port is 0, then dynamically allocate a
- * port and modify the original port variable to reflect the actual
- * port.
- * Parameters: pointer to variable containing the port to connect on
- * Returns: the socket */
-/**********************************************************************/
-int startup(u_short *port)
-{
-	int httpd = 0;
-	struct sockaddr_in name;
-
-	httpd = socket(PF_INET, SOCK_STREAM, 0);
-	if (httpd == -1)
-		error_die("socket");
-	memset(&name, 0, sizeof(name));
-	name.sin_family = AF_INET;
-	name.sin_port = htons(*port);
-	name.sin_addr.s_addr = htonl(INADDR_ANY);
-	if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0)
-		error_die("bind");
-	if (*port == 0)  /* if dynamically allocating a port */
-	{
-		int namelen = sizeof(name);
-		if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
-			error_die("getsockname");
-		*port = ntohs(name.sin_port);
-	}
-	if (listen(httpd, 5) < 0)
-		error_die("listen");
-	return(httpd);
-}
+char *default_mime_type = "text/plain";
 
 /**********************************************************************/
 /* Inform the client that the requested web method has not been
@@ -202,44 +70,260 @@ void unimplemented(int client)
 	send(client, buf, strlen(buf), 0);
 }
 
-/**********************************************************************/
+void rio_readinitb(rio_t *rp, int fd){
+    rp->rio_fd = fd;
+    rp->rio_cnt = 0;
+    rp->rio_bufptr = rp->rio_buf;
+}
 
-int main(void)
-{
-	int server_sock = -1;
-	u_short port = 4242;
-	int client_sock = -1;
-	struct sockaddr_in client_name;
-	socklen_t client_name_len = sizeof(client_name);
-	pthread_t newthread;
+ssize_t writen(int fd, void *usrbuf, size_t n){
+    size_t nleft = n;
+    ssize_t nwritten;
+    char *bufp = usrbuf;
 
-	/* You can set the port as an environmental variable */
-	char* pPort;
-	pPort = getenv ("PORT");
-	if (pPort!=NULL)
-		port = (u_short) strtol (pPort,(char **)NULL, 10);
-	printf("Port set to %i\n",port);
-
-	server_sock = startup(&port);
-	printf("httpd running on port %d\n", port);
-
+    while (nleft > 0){
+        if ((nwritten = write(fd, bufp, nleft)) <= 0){
+            if (errno == EINTR)  /* interrupted by sig handler return */
+                nwritten = 0;    /* and call write() again */
+            else
+                return -1;       /* errorno set by write() */
+        }
+        nleft -= nwritten;
+        bufp += nwritten;
+    }
+    return n;
+}
 
 
-	while (1)
-	{
-		client_sock = accept(server_sock,
-				(struct sockaddr *)&client_name,
-				&client_name_len);
-		if (client_sock == -1) {
-			printf("We have hit an error at accept\n");
-			/* error_die("accept"); */
-		}
-		/* accept_request(client_sock); */
-		if (pthread_create(&newthread , NULL, &accept_request, &client_sock) != 0)
-			perror("pthread_create");
+/*
+ * rio_read - This is a wrapper for the Unix read() function that
+ *    transfers min(n, rio_cnt) bytes from an internal buffer to a user
+ *    buffer, where n is the number of bytes requested by the user and
+ *    rio_cnt is the number of unread bytes in the internal buffer. On
+ *    entry, rio_read() refills the internal buffer via a call to
+ *    read() if the internal buffer is empty.
+ */
+/* $begin rio_read */
+static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n){
+    int cnt;
+    while (rp->rio_cnt <= 0){  /* refill if buf is empty */
+
+        rp->rio_cnt = read(rp->rio_fd, rp->rio_buf,
+                           sizeof(rp->rio_buf));
+        if (rp->rio_cnt < 0){
+            if (errno != EINTR) /* interrupted by sig handler return */
+                return -1;
+        }
+        else if (rp->rio_cnt == 0)  /* EOF */
+            return 0;
+        else
+            rp->rio_bufptr = rp->rio_buf; /* reset buffer ptr */
+    }
+
+    /* Copy min(n, rp->rio_cnt) bytes from internal buf to user buf */
+    cnt = n;
+    if (rp->rio_cnt < n)
+        cnt = rp->rio_cnt;
+    memcpy(usrbuf, rp->rio_bufptr, cnt);
+    rp->rio_bufptr += cnt;
+    rp->rio_cnt -= cnt;
+    return cnt;
+}
+
+/*
+ * rio_readlineb - robustly read a text line (buffered)
+ */
+ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
+    int n, rc;
+    char c, *bufp = usrbuf;
+
+    for (n = 1; n < maxlen; n++){
+        if ((rc = rio_read(rp, &c, 1)) == 1){
+            *bufp++ = c;
+            if (c == '\n')
+                break;
+        } else if (rc == 0){
+            if (n == 1)
+                return 0; /* EOF, no data read */
+            else
+                break;    /* EOF, some data was read */
+        } else
+            return -1;    /* error */
+    }
+    *bufp = 0;
+    return n;
+}
+
+void format_size(char* buf, struct stat *stat){
+    if(S_ISDIR(stat->st_mode)){
+        sprintf(buf, "%s", "[DIR]");
+    } else {
+        off_t size = stat->st_size;
+        if(size < 1024){
+            sprintf(buf, "%lu", size);
+        } else if (size < 1024 * 1024){
+            sprintf(buf, "%.1fK", (double)size / 1024);
+        } else if (size < 1024 * 1024 * 1024){
+            sprintf(buf, "%.1fM", (double)size / 1024 / 1024);
+        } else {
+            sprintf(buf, "%.1fG", (double)size / 1024 / 1024 / 1024);
+        }
+    }
+}
+
+int open_listenfd(int port){
+    int listenfd, optval=1;
+    struct sockaddr_in serveraddr;
+
+    /* Create a socket descriptor */
+    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        return -1;
+
+    /* Eliminates "Address already in use" error from bind. */
+    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,
+                   (const void *)&optval , sizeof(int)) < 0)
+        return -1;
+
+    // 6 is TCP's protocol number
+    // enable this, much faster : 4000 req/s -> 17000 req/s
+    if (setsockopt(listenfd, 6, TCP_CORK,
+                   (const void *)&optval , sizeof(int)) < 0)
+        return -1;
+
+    /* Listenfd will be an endpoint for all requests to port
+       on any IP address for this host */
+    memset(&serveraddr, 0, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serveraddr.sin_port = htons((unsigned short)port);
+    if (bind(listenfd, (SA *)&serveraddr, sizeof(serveraddr)) < 0)
+        return -1;
+
+    /* Make it a listening socket ready to accept connection requests */
+    if (listen(listenfd, LISTENQ) < 0)
+        return -1;
+    return listenfd;
+}
+
+void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
+    printf("%s:%d %d - %s\n", inet_ntoa(c_addr->sin_addr),
+           ntohs(c_addr->sin_port), status, req->filename);
+}
+
+void client_error(int fd, int status, char *msg, char *longmsg){
+    char buf[MAXLINE];
+    sprintf(buf, "HTTP/1.1 %d %s\r\n", status, msg);
+    sprintf(buf + strlen(buf),
+            "Content-length: %lu\r\n\r\n", strlen(longmsg));
+    sprintf(buf + strlen(buf), "%s", longmsg);
+    writen(fd, buf, strlen(buf));
+}
+
+void process(int fd, struct sockaddr_in *clientaddr){
+    printf("accept request, fd is %d, pid is %d\n", fd, getpid());
+
+    int status = 200;
+
+	char buf[1024];
+	u_int numchars;
+	char method[255];
+	char url[1024];
+	size_t i, j;
+    int client=fd;
+
+	numchars = getLine(client, buf, sizeof(buf));
+	if (numchars==0) {
+		printf("Keep alive null packet. Ignore %d\n",numchars);
+		return;
 	}
 
-	close(server_sock);
+	i = 0; j = 0;
+	while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
+	{
+		method[i] = buf[j];
+		i++; j++;
 
-	return(0);
+	}
+	method[i] = '\0';
+
+	if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
+	{
+		unimplemented(client);
+		return;
+	}
+
+
+	i = 0;
+	while (ISspace(buf[j]) && (j < sizeof(buf)))
+		j++;
+	while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf)))
+	{
+		url[i] = buf[j];
+		i++; j++;
+	}
+	url[i] = '\0';
+
+	Request request;
+	request.client=client;
+	request.reqStr=url;
+	request.method=method;
+
+	/*server(client,url,method);*/
+
+	server(request);
+
+	close(client);
+
+	http_request req;
+	strcpy(req.filename,url);
+    log_access(status, clientaddr, &req);
+}
+
+int main(void){
+	int i;
+    struct sockaddr_in clientaddr;
+    int default_port = 9999,
+        listenfd,
+        connfd;
+
+    socklen_t clientlen = sizeof clientaddr;
+
+    char* pPort = getenv ("PORT");
+
+	if (pPort!=NULL)
+		default_port = (u_short) strtol (pPort,(char **)NULL, 10);
+
+    listenfd = open_listenfd(default_port);
+    if (listenfd > 0) {
+        printf("listen on port %d, fd is %d\n", default_port, listenfd);
+    } else {
+        perror("ERROR");
+        exit(listenfd);
+    }
+    // Ignore SIGPIPE signal, so if browser cancels the request, it
+    // won't kill the whole process.
+    signal(SIGPIPE, SIG_IGN);
+
+    for(i = 0; i < 10; i++) {
+        int pid = fork();
+        if (pid == 0) {         //  child
+            while(1){
+                connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+                process(connfd, &clientaddr);
+                close(connfd);
+            }
+        } else if (pid > 0) {   //  parent
+            printf("child pid is %d\n", pid);
+        } else {
+            perror("fork");
+        }
+    }
+
+    while(1){
+        connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
+        process(connfd, &clientaddr);
+        close(connfd);
+    }
+
+    return 0;
 }
