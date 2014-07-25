@@ -76,7 +76,7 @@ char * getQueryParam(const char * queryString, const char *name) {
 char * getQueryPath(const char * reqString)
 { 
 	char * queryPath;
-	queryPath = dupstr(reqString);
+	queryPath = strdup(reqString);
 	u_int i;
 	for (i=0;i<strlen(reqString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
 	}
@@ -341,18 +341,6 @@ void notFound(int client)
 	nprintf(client, "</BODY></HTML>\r\n");
 }
 
-char * dupstr (const char *s)
-{
-  size_t len = strlen (s) + 1;
-  char *newstr = malloc (len*sizeof(char));
-
-  if (newstr == NULL)
-    return NULL;
-
-  memcpy (newstr, s, len);
-  return newstr;
-}
-
 char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr) {
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
@@ -364,6 +352,7 @@ char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char
 				CTAG(form)
 				,qpath,msg,inputstr);
 	}
+	free(qpath);
 	return qparam;
 }
 
@@ -376,14 +365,17 @@ char * _hscan(int client, const char * reqStr, const char *msg,const char * inpu
 				STAG(input,type="submit")
 			CTAG(form)
 			,qpath,msg,inputstr);
+	free(qpath);
 	return qparam;
 }
 
 bool route(Request request, const char * path) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
+		free(queryPath);
 		return true;
 	} else {
+		free(queryPath);
 		return false;
 	}
 }
@@ -391,11 +383,13 @@ bool route(Request request, const char * path) {
 bool routeh(Request request, const char * path) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
+		free(queryPath);
 		char ** headers = sendAndReceiveHeaders(request.client);
 		if (headers)
 			freeHeaders(headers);
 		return true;
 	} else {
+		free(queryPath);
 		return false;
 	}
 }
@@ -403,9 +397,11 @@ bool routeh(Request request, const char * path) {
 bool routef(Request request, const char * path, void (* function)(int,char *, char*)) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
+		free(queryPath);
 		function(request.client,request.reqStr,request.method);
 		return true;
 	} else {
+		free(queryPath);
 		return false;
 	}
 }
@@ -413,12 +409,14 @@ bool routef(Request request, const char * path, void (* function)(int,char *, ch
 bool routefh(Request request, const char * path, void (* function)(int,char *, char*)) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
+		free(queryPath);
 		char ** headers = sendAndReceiveHeaders(request.client);
 		function(request.client,request.reqStr,request.method);
 		if (headers)
 			freeHeaders(headers);
 		return true;
 	} else {
+		free(queryPath);
 		return false;
 	}
 }
