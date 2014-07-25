@@ -27,7 +27,7 @@
 
 typedef struct {
     int rio_fd;                 /* descriptor for this buf */
-    int rio_cnt;                /* unread byte in this buf */
+    size_t rio_cnt;                /* unread byte in this buf */
     char *rio_bufptr;           /* next unread byte in this buf */
     char rio_buf[RIO_BUFSIZE];  /* internal buffer */
 } rio_t;
@@ -94,20 +94,21 @@ ssize_t writen(int fd, void *usrbuf, size_t n){
  *    read() if the internal buffer is empty.
  */
 /* $begin rio_read */
-static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n){
-    int cnt;
-    while (rp->rio_cnt <= 0){  /* refill if buf is empty */
+static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n) {
+    ssize_t cnt, tmp;
+    if (rp->rio_cnt == 0) {  /* refill if buf is empty */
 
-        rp->rio_cnt = read(rp->rio_fd, rp->rio_buf,
+        tmp = read(rp->rio_fd, rp->rio_buf,
                            sizeof(rp->rio_buf));
-        if (rp->rio_cnt < 0){
+        if (tmp < 0){
             if (errno != EINTR) /* interrupted by sig handler return */
                 return -1;
         }
-        else if (rp->rio_cnt == 0)  /* EOF */
+        else if (tmp == 0)  /* EOF */
             return 0;
-        else
-            rp->rio_bufptr = rp->rio_buf; /* reset buffer ptr */
+
+        rp->rio_bufptr = rp->rio_buf; /* reset buffer ptr */
+        rp->rio_cnt = tmp;
     }
 
     /* Copy min(n, rp->rio_cnt) bytes from internal buf to user buf */
@@ -124,7 +125,8 @@ static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n){
  * rio_readlineb - robustly read a text line (buffered)
  */
 ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
-    int n, rc;
+    size_t n;
+    ssize_t rc;
     char c, *bufp = usrbuf;
 
     for (n = 1; n < maxlen; n++){
