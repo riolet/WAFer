@@ -29,41 +29,41 @@
 
 char * getQueryParam(const char * queryString, const char *name) { 
 
-	char *pos1 = strstr(queryString, name);
+	char bufferAmpersand[MAX_BUFFER_SIZE];
+	char bufferQuestion[MAX_BUFFER_SIZE];
+	snprintf(bufferQuestion,MAX_BUFFER_SIZE-1,"?%s=",name);
+	snprintf(bufferAmpersand,MAX_BUFFER_SIZE-1,"&%s=",name);
+	char *buffer;
+	char *pos1;
+
+
 	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
 	int i;
 
-    int queryStringPos = pos1-queryString;
-    char *pos2 = pos1;
-    while (queryStringPos > 0 && queryString[queryStringPos-1] != '&') {
-        pos1 = strstr(pos2, name);
-        queryStringPos += pos2-pos1;
-        pos2 += strlen(name);
+	buffer=bufferQuestion;
+	pos1 = strstr(queryString,bufferQuestion);
+	printf ("Buffer %s Pos %d\n",buffer,pos1);
+    if (!pos1) {
+    	buffer=bufferAmpersand;
+        pos1 = strstr(queryString, bufferAmpersand);
     }
-
 	if (pos1) {
-		pos1 += strlen(name);
-
-		if (*pos1 == '=') {
-			pos1++;
-			i=0;
-			while (*pos1 && *pos1 != '&') {
-				if (*pos1 == '%') {
-					value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
-					pos1 += 3;
-				} else if( *pos1=='+' ) {
-					value[i] = ' ';
-					pos1++;
-				} else {
-					value[i] = *pos1++;
-				}
-				i++;
+		pos1 += strlen(buffer);
+		i=0;
+		while (*pos1 && *pos1 != '&') {
+			if (*pos1 == '%') {
+				value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
+				pos1 += 3;
+			} else if( *pos1=='+' ) {
+				value[i] = ' ';
+				pos1++;
+			} else {
+				value[i] = *pos1++;
 			}
-
-			value[i] = '\0';
-			return value;
-		} 
-
+			i++;
+		}
+		value[i] = '\0';
+		return value;
 	}
 
 	strcpy(value, UNDEFINED);
@@ -165,6 +165,7 @@ char ** readHeaders(int client) {
 
 
 	numchars = getLine(client, buf, sizeof(buf));
+	/*Todo: Close the FD if numchars<=0 */
 	while ((numchars > 0) && strcmp("\n", buf)) {
 		/* printf("Numchars %d %s\n",numchars,buf); */
 		headers[i]=malloc((numchars+1)*sizeof(char));
@@ -305,6 +306,9 @@ int getLine(int sock, char *buf, int size)
 	while ((i < size - 1) && (c != '\n'))
 	{
 		n = recv(sock, &c, 1, 0);
+		if (n<0) {
+			return n;
+		}
 		/* DEBUG printf("%02X\n", c); */
 		if (n > 0)
 		{

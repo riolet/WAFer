@@ -9,12 +9,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <netdb.h>
+
+
 
 #include "server.h"
 #include "nopeutils.h"
@@ -209,7 +214,7 @@ void client_error(int fd, int status, char *msg, char *longmsg){
     nprintf(fd, "%s", longmsg);
 }
 
-void process(int fd, struct sockaddr_in *clientaddr){
+void process(int fd,  fd_set *pMaster, struct sockaddr_in *clientaddr){
     printf("accept request, fd is %d, pid is %d\n", fd, getpid());
 
     int status = 200;
@@ -222,10 +227,6 @@ void process(int fd, struct sockaddr_in *clientaddr){
     int client=fd;
 
 	numchars = getLine(client, buf, sizeof(buf));
-	if (numchars==0) {
-		printf("Keep alive null packet. Ignore %d\n",numchars);
-		return;
-	}
 
 	i = 0; j = 0;
 	while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
@@ -269,6 +270,88 @@ void process(int fd, struct sockaddr_in *clientaddr){
     log_access(status, clientaddr, &req);
 }
 
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+void selectLoop(int listener)
+{
+	/* Thank you Brian "Beej Jorgensen" Hall */
+    fd_set master;    // master file descriptor list
+    fd_set read_fds;  // temp file descriptor list for select()
+    int fdmax;        // maximum file descriptor number
+
+    int newfd;        // newly accept()ed socket descriptor
+    struct sockaddr_storage remoteaddr; // client address
+    socklen_t addrlen;
+
+    char buf[256];    // buffer for client data
+    int nbytes;
+
+    char remoteIP[INET6_ADDRSTRLEN];
+
+    int i, j, rv;
+
+    struct addrinfo hints, *ai, *p;
+
+    FD_ZERO(&master);    // clear the master and temp sets
+    FD_ZERO(&read_fds);
+
+    // add the listener to the master set
+    FD_SET(listener, &master);
+
+    // keep track of the biggest file descriptor
+    fdmax = listener; // so far, it's this one
+
+    // main loop
+    for(;;) {
+        read_fds = master; // copy it
+        if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
+            perror("select");
+            exit(4);
+        }
+
+        // run through the existing connections looking for data to read
+        for(i = 0; i <= fdmax; i++) {
+            if (FD_ISSET(i, &read_fds)) { // we got one!!
+                if (i == listener) {
+                    // handle new connections
+                    addrlen = sizeof remoteaddr;
+                    newfd = accept(listener,
+                        (struct sockaddr *)&remoteaddr,
+                        &addrlen);
+
+                    if (newfd == -1) {
+                        perror("accept");
+                    } else {
+                        FD_SET(newfd, &master); // add to master set
+                        if (newfd > fdmax) {    // keep track of the max
+                            fdmax = newfd;
+                        }
+                        printf("selectserver: new connection from %s on "
+                            "socket %d\n",
+                            inet_ntop(remoteaddr.ss_family,
+                                get_in_addr((struct sockaddr*)&remoteaddr),
+                                remoteIP, INET6_ADDRSTRLEN),
+                            newfd);
+                    }
+                } else {
+                    process(i, &master, &remoteaddr);
+                    close(i); // bye!
+                    FD_CLR(i, &master); // remove from master set
+                } // END handle data from client
+            } // END got new incoming connection
+        } // END looping through file descriptors
+    } // END for(;;)--and you thought it would never end!
+
+    return;
+}
+
 int main(void){
 	int i;
     struct sockaddr_in clientaddr;
@@ -303,11 +386,7 @@ int main(void){
     for(i = 0; i < nChildren; i++) {
         int pid = fork();
         if (pid == 0) {         //  child
-            while(1){
-                connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
-                process(connfd, &clientaddr);
-                close(connfd);
-            }
+        	selectLoop(listenfd);
         } else if (pid > 0) {   //  parent
             printf("child pid is %d\n", pid);
         } else {
@@ -315,11 +394,6 @@ int main(void){
         }
     }
 
-    while(1){
-        connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
-        process(connfd, &clientaddr);
-        close(connfd);
-    }
-
+	selectLoop(listenfd);
     return 0;
 }
