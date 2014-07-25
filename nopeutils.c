@@ -213,17 +213,12 @@ void serveDownloadableFile(int client, const char *filename, const char *display
 {
 
 	FILE *resource = NULL;
-	char buf[1024];
-	size_t len;
 
 	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
 	STATIC_SEND(client, SERVER_STRING, 0);
 
-	len = snprintf(buf, sizeof(buf), "Content-Type: %s\r\n",type);
-	send(client, buf, len, 0);
-
-	len = snprintf(buf, sizeof(buf), "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
-	send(client, buf, len, 0);
+	nprintf(client, "Content-Type: %s\r\n",type);
+	nprintf(client, "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
 
 	STATIC_SEND(client, "\r\n", 0);
 
@@ -242,14 +237,11 @@ void serveFile(int client, const char *filename, const char * type)
 {
 
 	FILE *resource = NULL;
-	char buf[1024];
-	size_t len;
 
 	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
 	STATIC_SEND(client, SERVER_STRING, 0);
 
-	len = snprintf(buf, sizeof(buf), "Content-Type: %s\r\n",type);
-	send(client, buf, len, 0);
+	nprintf(client, "Content-Type: %s\r\n",type);
 
 	STATIC_SEND(client, "\r\n", 0);
 

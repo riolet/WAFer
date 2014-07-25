@@ -203,12 +203,10 @@ void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
 }
 
 void client_error(int fd, int status, char *msg, char *longmsg){
-    char buf[MAXLINE];
-    sprintf(buf, "HTTP/1.1 %d %s\r\n", status, msg);
-    sprintf(buf + strlen(buf),
-            "Content-length: %lu\r\n\r\n", strlen(longmsg));
-    sprintf(buf + strlen(buf), "%s", longmsg);
-    writen(fd, buf, strlen(buf));
+    nprintf(fd, "HTTP/1.1 %d %s\r\n", status, msg);
+    STATIC_SEND(fd, SERVER_STRING, 0);
+    nprintf(fd, "Content-length: %lu\r\n\r\n", strlen(longmsg));
+    nprintf(fd, "%s", longmsg);
 }
 
 void process(int fd, struct sockaddr_in *clientaddr){
