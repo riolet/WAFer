@@ -13,3 +13,5 @@ Acknowledgements:
 
 1. [J. David Blackstone](http://sourceforge.net/u/jdavidb/profile/) and [Feng Shen](https://github.com/shenfeng), whose web servers have been repurposed to build this platform.
 
+2. [Mark Karpeles](https://github.com/MagicalTux) for the incredible number of bug fixes!
+
