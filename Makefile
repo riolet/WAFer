@@ -1,7 +1,27 @@
-all: server
+#!/bin/make
 
-server: nope.c
-	gcc -W -Wall -pthread -o server nopeutils.c nope.c server.c
+CC=gcc
+AR=ar
+CFLAGS=-W -Wall -O2
+LIBNOPE_OBJ=nope.o nopeutils.o
+LIBNOPE=libnope.a
+MODULES=server
+
+all: $(MODULES)
+
+# rule to build modules
+%: %.c $(LIBNOPE)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(LIBNOPE): $(LIBNOPE_OBJ)
+	$(AR) r $@ $^
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm server
+	rm $(LIBNOPE_OBJ)
+
+distclean:
+	rm $(LIBNOPE) $(LIBNOPE_OBJ) $(MODULES)
+

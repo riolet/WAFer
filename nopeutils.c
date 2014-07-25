@@ -14,7 +14,6 @@
 #include <strings.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <pthread.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -156,7 +155,7 @@ char ** readHeaders(int client) {
 		/* printf("Numchars %d %s\n",numchars,buf); */
 		headers[i]=malloc((numchars+1)*sizeof(char));
 		memcpy(headers[i],buf,numchars);
-		headers[i][numchars]=NULL;
+		headers[i][numchars]=0;
 		i++;
 		numchars = getLine(client, buf, sizeof(buf));
 	}
@@ -183,8 +182,6 @@ char * getHeader(char **headers, char *header) {
 
 void writeStandardHeaders(int client)
 {
-	char buf[MAX_BUFFER_SIZE];
-
 	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
 	STATIC_SEND(client, SERVER_STRING, 0);
 	STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
