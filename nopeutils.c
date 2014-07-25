@@ -185,14 +185,10 @@ void writeStandardHeaders(int client)
 {
 	char buf[MAX_BUFFER_SIZE];
 
-	strcpy(buf, "HTTP/1.0 200 OK\r\n");
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, SERVER_STRING);
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, "Content-Type: text/html\r\n");
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, "\r\n");
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+	STATIC_SEND(client, SERVER_STRING, 0);
+	STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
+	STATIC_SEND(client, "\r\n", 0);
 }
 
 void cat(int client, FILE *pFile)
@@ -213,22 +209,18 @@ void serveDownloadableFile(int client, const char *filename, const char *display
 
 	FILE *resource = NULL;
 	char buf[1024];
+	size_t len;
 
-	strcpy(buf, "HTTP/1.0 200 OK\r\n");
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+	STATIC_SEND(client, SERVER_STRING, 0);
 
-	strcpy(buf, SERVER_STRING);
-	send(client, buf, strlen(buf), 0);
+	len = snprintf(buf, sizeof(buf), "Content-Type: %s\r\n",type);
+	send(client, buf, len, 0);
 
-	sprintf(buf, "Content-Type: %s\r\n",type);
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, "\r\n");
+	len = snprintf(buf, sizeof(buf), "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
+	send(client, buf, len, 0);
 
-	sprintf(buf, "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, "\r\n");
-
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "\r\n", 0);
 
 	resource = fopen(filename, "r");
 	if (resource == NULL)
@@ -246,18 +238,15 @@ void serveFile(int client, const char *filename, const char * type)
 
 	FILE *resource = NULL;
 	char buf[1024];
+	size_t len;
 
-	strcpy(buf, "HTTP/1.0 200 OK\r\n");
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+	STATIC_SEND(client, SERVER_STRING, 0);
 
-	strcpy(buf, SERVER_STRING);
-	send(client, buf, strlen(buf), 0);
+	len = snprintf(buf, sizeof(buf), "Content-Type: %s\r\n",type);
+	send(client, buf, len, 0);
 
-	sprintf(buf, "Content-Type: %s\r\n",type);
-	send(client, buf, strlen(buf), 0);
-	strcpy(buf, "\r\n");
-
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "\r\n", 0);
 
 	resource = fopen(filename, "r");
 	if (resource == NULL)

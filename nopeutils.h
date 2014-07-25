@@ -43,6 +43,8 @@
 
 #define HP_CLOSE CRLF CTAG(body) CRLF CTAG(html)
 
+#define STATIC_SEND(_socket, _str, _flags) send(_socket, _str, sizeof(_str)-1, _flags)
+
 #include <stdarg.h>
 char ** readHeaders(int);
 void freeHeaders(char **);

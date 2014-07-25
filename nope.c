@@ -50,24 +50,14 @@ char *default_mime_type = "text/plain";
 /**********************************************************************/
 void unimplemented(int client)
 {
-	char buf[1024];
-
-	sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, SERVER_STRING);
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Content-Type: text/html\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<HTML><HEAD><TITLE>Method Not Implemented\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "</TITLE></HEAD>\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<BODY><P>HTTP request method not supported.\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "</BODY></HTML>\r\n");
-	send(client, buf, strlen(buf), 0);
+	STATIC_SEND(client, "HTTP/1.0 501 Method Not Implemented\r\n", 0);
+	STATIC_SEND(client, SERVER_STRING, 0);
+	STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
+	STATIC_SEND(client, "\r\n", 0);
+	STATIC_SEND(client, "<HTML><HEAD><TITLE>Method Not Implemented\r\n", 0);
+	STATIC_SEND(client, "</TITLE></HEAD>\r\n", 0);
+	STATIC_SEND(client, "<BODY><P>HTTP request method not supported.\r\n", 0);
+	STATIC_SEND(client, "</BODY></HTML>\r\n", 0);
 }
 
 void rio_readinitb(rio_t *rp, int fd){
