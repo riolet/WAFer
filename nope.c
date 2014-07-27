@@ -31,6 +31,22 @@
 #define RIO_BUFSIZE 1024
 
 typedef struct {
+    short int state;
+    char *readBuffer;
+    short  readBufferIdx;
+    short  readBufferLen;
+    char *method;
+    short methodIdx;
+    char *uri;
+    short uriIdx;
+    char *ver;
+    short verIdx;
+    char **headers;
+    short headersIdx;
+    short withinHeaderIdx;
+} FdData;
+
+typedef struct {
     int rio_fd;                 /* descriptor for this buf */
     size_t rio_cnt;                /* unread byte in this buf */
     char *rio_bufptr;           /* next unread byte in this buf */
@@ -41,7 +57,7 @@ typedef struct {
 typedef struct sockaddr SA;
 
 typedef struct {
-    char filename[512];
+    char filename[MAX_BUFFER_SIZE];
     off_t offset;              /* for support Range */
     size_t end;
 } http_request;
@@ -151,23 +167,6 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
     return n;
 }
 
-void format_size(char* buf, struct stat *stat){
-    if(S_ISDIR(stat->st_mode)){
-        sprintf(buf, "%s", "[DIR]");
-    } else {
-        off_t size = stat->st_size;
-        if(size < 1024){
-            sprintf(buf, "%lu", size);
-        } else if (size < 1024 * 1024){
-            sprintf(buf, "%.1fK", (double)size / 1024);
-        } else if (size < 1024 * 1024 * 1024){
-            sprintf(buf, "%.1fM", (double)size / 1024 / 1024);
-        } else {
-            sprintf(buf, "%.1fG", (double)size / 1024 / 1024 / 1024);
-        }
-    }
-}
-
 int open_listenfd(int port){
     int listenfd, optval=1;
     struct sockaddr_in serveraddr;
@@ -207,29 +206,26 @@ void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
            ntohs(c_addr->sin_port), status, req->filename);
 }
 
-void client_error(int fd, int status, char *msg, char *longmsg){
-    nprintf(fd, "HTTP/1.1 %d %s\r\n", status, msg);
-    STATIC_SEND(fd, SERVER_STRING, 0);
-    nprintf(fd, "Content-length: %lu\r\n\r\n", strlen(longmsg));
-    nprintf(fd, "%s", longmsg);
-}
-
-void process(int fd,  fd_set *pMaster, struct sockaddr_in *clientaddr){
+int process(int fd, char **readBuffer, fd_set *pMaster, struct sockaddr_in *clientaddr){
     printf("accept request, fd is %d, pid is %d\n", fd, getpid());
 
     int status = 200;
 
-	char buf[1024];
-	u_int numchars;
-	char method[255];
-	char url[1024];
+	char buf[MAX_BUFFER_SIZE];
+	unsigned int numchars;
+	char method[MAX_BUFFER_SIZE];
+	char url[MAX_BUFFER_SIZE];
 	size_t i, j;
     int client=fd;
 
-	numchars = getLine(client, buf, sizeof(buf));
+	numchars = getLine(client, buf, sizeof(buf)-1);
+
+	/* Null requests. Safe to ignore */
+	if (numchars==0)
+		return numchars;
 
 	i = 0; j = 0;
-	while (!ISspace(buf[j]) && (i < sizeof(method) - 1))
+	while (!ISspace(buf[j]) && (i < sizeof(method) - 1) && i<numchars)
 	{
 		method[i] = buf[j];
 		i++; j++;
@@ -240,7 +236,7 @@ void process(int fd,  fd_set *pMaster, struct sockaddr_in *clientaddr){
 	if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
 	{
 		unimplemented(client);
-		return;
+		return 1;
 	}
 
 
@@ -254,20 +250,6 @@ void process(int fd,  fd_set *pMaster, struct sockaddr_in *clientaddr){
 	}
 	url[i] = '\0';
 
-	Request request;
-	request.client=client;
-	request.reqStr=url;
-	request.method=method;
-
-	/*server(client,url,method);*/
-
-	server(request);
-
-	close(client);
-
-	http_request req;
-	strcpy(req.filename,url);
-    log_access(status, clientaddr, &req);
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -277,6 +259,24 @@ void *get_in_addr(struct sockaddr *sa)
     }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+initializeFdData(FdData *fdData) {
+	fdData->state=STATE_METHOD;
+	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
+	fdData->uri=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fdData->headers=malloc(MAX_HEADERS*sizeof(char*));
+	fdData->headers[0]=malloc(MAX_BUFFER_SIZE*sizeof(char));
+	fdData->ver=malloc(MAX_HEADERS*sizeof(char*));
+	fdData->readBufferIdx=0;
+	fdData->readBufferLen=0;
+	fdData->readBufferIdx=0;
+	fdData->methodIdx=0;
+	fdData->uriIdx=0;
+	fdData->verIdx=0;
+	fdData->headersIdx=0;
+	fdData->withinHeaderIdx=0;
 }
 
 void selectLoop(int listener)
@@ -290,12 +290,12 @@ void selectLoop(int listener)
     struct sockaddr_storage remoteaddr; // client address
     socklen_t addrlen;
 
-    char buf[256];    // buffer for client data
+    char buf[MAX_BUFFER_SIZE];    // buffer for client data
     int nbytes;
 
     char remoteIP[INET6_ADDRSTRLEN];
 
-    int i, j, rv;
+    int i;
 
     struct addrinfo hints, *ai, *p;
 
@@ -308,7 +308,25 @@ void selectLoop(int listener)
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
 
+    FdData fdData[MAX_FD_SIZE];
+    for (i=0;i<fdmax;i++) {
+    	fdData[i].state=STATE_PRE_REQUEST;
+    }
+
+    /*
+    short int state[MAX_FD_SIZE];
+    char *readBuffer[MAX_FD_SIZE];
+    short int readBufferIdx[MAX_FD_SIZE];
+    char *method[MAX_FD_SIZE];
+    char *uri[MAX_FD_SIZE];
+    char **headers[MAX_FD_SIZE];
+     */
+
     // main loop
+    char printBuffer[1024];
+    char *method;
+    char *uri;
+    int idx,j,len;
     for(;;) {
         read_fds = master; // copy it
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
@@ -325,6 +343,10 @@ void selectLoop(int listener)
                     newfd = accept(listener,
                         (struct sockaddr *)&remoteaddr,
                         &addrlen);
+                    if (newfd>MAX_FD_SIZE) {
+                    	fprintf(stderr,"Max FD Size reached. Can't continue");
+                    	return;
+                    }
 
                     if (newfd == -1) {
                         perror("accept");
@@ -339,11 +361,223 @@ void selectLoop(int listener)
                                 get_in_addr((struct sockaddr*)&remoteaddr),
                                 remoteIP, INET6_ADDRSTRLEN),
                             newfd);
+                        fdData[i].state=STATE_PRE_REQUEST;
                     }
                 } else {
-                    process(i, &master, &remoteaddr);
-                    close(i); // bye!
-                    FD_CLR(i, &master); // remove from master set
+                    // handle data from a client
+                    if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+                        // got error or connection closed by client
+                        if (nbytes == 0) {
+                            // connection closed
+                            printf("selectserver: socket %d hung up\n", i);
+                        } else {
+                            perror("recv");
+                        }
+                        close(i); // bye!
+                        FD_CLR(i, &master); // remove from master set
+                    } else {
+                    	// we got some data from a client
+
+                    	snprintf(printBuffer,1024,"%s",buf);
+                    	printf("Received %d as %s\n",nbytes,printBuffer);
+                    	bool read=false;
+                    	if (fdData[i].state==STATE_PRE_REQUEST) {
+                    		initializeFdData(&fdData[i]);
+                    		memcpy(fdData[i].readBuffer,buf,nbytes);
+                    		fdData[i].readBufferLen += nbytes;
+                    		read=true;
+                    	}
+
+                    	if (fdData[i].state==STATE_METHOD) {
+                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
+                    		printf("STATE=METHOD -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+                    		if (!read) {
+                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				fdData[i].readBufferLen += nbytes;
+                    				read=true;
+                    			}
+                    		}
+
+                    		idx=fdData[i].methodIdx;
+                    		j=fdData[i].readBufferIdx;
+                    		len=fdData[i].readBufferLen;
+
+                    		while (j<len && idx<MAX_METHOD_SIZE)
+                    		{
+                    			if (fdData[i].readBuffer[j]=='\n') {
+                         			fdData[i].method[idx]=0;
+                            		fdData[i].state=STATE_HEADER;
+                            		break;
+                    			} else if (ISspace(fdData[i].readBuffer[j])) {
+                        			fdData[i].method[idx]=0;
+                        			fdData[i].state=STATE_VERSION;
+                        			break;
+                        		} else if (fdData[i].readBuffer[j]=='\r') {
+                        			/*Skip over \r */
+                    			} else {
+                    				fdData[i].method[idx] = fdData[i].readBuffer[j];
+                    				idx++;
+                    			}
+                    			j++;
+                    		}
+
+                    		fdData[i].methodIdx=idx;
+                    		fdData[i].readBufferIdx=j+1;
+
+                    		if (idx==MAX_METHOD_SIZE) {	/*We don't like really long methods. Cut em off */
+                    			fdData[i].method[idx]=0;
+                    			fdData[i].state=STATE_URI;
+                    		}
+
+                    	}
+
+                    	if (fdData[i].state==STATE_URI) {
+                    		printf("Method of %d is %s\n",i,fdData[i].method);
+
+                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
+                    		//printf("STATE=URI -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+                    		if (!read) {
+                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				fdData[i].readBufferLen += nbytes;
+                    				read=true;
+                    			}
+                    		}
+
+                    		idx=fdData[i].uriIdx;
+                    		j=fdData[i].readBufferIdx;
+                    		len=fdData[i].readBufferLen;
+
+                    		while (j<len && idx<MAX_REQUEST_SIZE)
+                    		{
+                    			if (fdData[i].readBuffer[j]=='\n') {
+                         			fdData[i].uri[idx]=0;
+                            		fdData[i].state=STATE_HEADER;
+                            		break;
+                    			} else if (ISspace(fdData[i].readBuffer[j])) {
+                        			fdData[i].uri[idx]=0;
+                        			fdData[i].state=STATE_VERSION;
+                        			break;
+                        		} else if (fdData[i].readBuffer[j]=='\r') {
+                        			/*Skip over \r */
+                    			} else {
+                    				fdData[i].uri[idx] = fdData[i].readBuffer[j];
+                    				idx++;
+                    			}
+                    			j++;
+                    		}
+
+                    		fdData[i].uriIdx=idx;
+                    		fdData[i].readBufferIdx=j+1;
+
+                    		if (idx==MAX_REQUEST_SIZE) {	/*We don't like really long URIs either. Cut em off */
+                    			fdData[i].uri[idx]=0;
+                    			fdData[i].state=STATE_VERSION;
+                    		}
+
+                    	}
+
+                    	if (fdData[i].state==STATE_VERSION) {
+                    		printf("URI of %d is %s\n",i,fdData[i].uri);
+
+                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
+                    		//printf("STATE=VERSION -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+
+                    		if (!read) {
+                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				fdData[i].readBufferLen += nbytes;
+                    				read=true;
+                    			} else {
+                    				return; /* How big do you want your request to be?? */
+                    			}
+                    		}
+
+                    		idx=fdData[i].verIdx;
+                    		j=fdData[i].readBufferIdx;
+                    		len=fdData[i].readBufferLen;
+
+                    		while (j<len && idx<MAX_VER_SIZE)
+                    		{
+                    			if (fdData[i].readBuffer[j]=='\n') {
+                         			fdData[i].ver[idx]=0;
+                            		fdData[i].state=STATE_HEADER;
+                            		break;
+                    			} else if (fdData[i].readBuffer[j]=='\r') {
+                        			/*Skip over \r */
+                    			} else {
+                    				fdData[i].ver[idx] = fdData[i].readBuffer[j];
+                    				idx++;
+                    			}
+                    			j++;
+                    		}
+                    		fdData[i].verIdx=idx;
+                    		fdData[i].readBufferIdx=j+1;
+
+                    		/*We don't like really long version either. Cut em off */
+                    		if (idx==MAX_VER_SIZE) {	/*We don't like really long URIs either. Cut em off */
+                    			fdData[i].ver[idx]=0;
+                    			fdData[i].state=STATE_HEADER;
+                    		}
+
+                    	}
+
+                    	if (fdData[i].state==STATE_HEADER) {
+                    		printf("VER of %d is %s\n",i,fdData[i].ver);
+
+                    		printf("Start reading headers\n");
+                    		if (!read) {
+                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				fdData[i].readBufferLen += nbytes;
+                    				read=true;
+                    			} else {
+                    				return; /* How big do you want your request to be?? */
+                    			}
+                    		}
+
+                    		j=fdData[i].readBufferIdx,
+                    		len=fdData[i].readBufferLen;
+                    		idx=fdData[i].withinHeaderIdx;
+
+                    		while (j<len) {
+                    			if (fdData[i].readBuffer[j]=='\n') {
+                    				if (fdData[i].withinHeaderIdx==0) {
+                    					break; /* The last header */
+                    				}
+                    				fdData[i].headersIdx++;
+                         			fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
+                         			idx=fdData[i].withinHeaderIdx=0;
+                            		break;
+                    			} else if (fdData[i].readBuffer[j]=='\r') {
+                        			/*Skip over \r */
+                    			} else {
+                    				fdData[i].ver[idx] = fdData[i].readBuffer[j];
+                    				idx++;
+                    			}
+                    			j++;
+                    		}
+                    		fdData[i].withinHeaderIdx=idx;
+                    		fdData[i].readBufferIdx=j+1;
+
+                    		Request request;
+                    		request.client=i;
+                    		request.reqStr=fdData[i].uri;
+                    		request.method=fdData[i].method;
+                    		request.headers=fdData[i].headers;
+                    		server(request);
+                    		close(i);
+
+                    		http_request req;
+                    		snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
+                    		char * clientaddr = "TODO";
+                    	    log_access(STATUS_HTTP_OK, clientaddr, &req);
+                    	    initializeFdData(&fdData[i]);
+                            close(i); // bye!
+                            FD_CLR(i, &master); // remove from master set
+                    	}
+                    }
                 } // END handle data from client
             } // END got new incoming connection
         } // END looping through file descriptors

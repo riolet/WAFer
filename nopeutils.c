@@ -19,6 +19,12 @@
 #include <stdarg.h>
 #include "nopeutils.h"
 
+/* String functions */
+typedef struct nopeString {
+	char * string;
+	short length;
+};
+
 
 /**********************************************************************/
 /* Return the value of a query parameter.
@@ -155,8 +161,18 @@ long nprintf (int client, const char *format, ...) {
 /**********************************************************************/
 
 char ** readHeaders(int client) {
+	/*We don't read headers here anymore */
+
+
 	char buf[MAX_BUFFER_SIZE];
 	char **headers;
+
+	/*TODO:we hate headers */
+	headers=malloc(sizeof(char*)*1);
+	headers[0]=0;
+	return headers;
+	/* End rant */
+
 	int numchars;
 	int i=0;
 
@@ -281,7 +297,6 @@ ssize_t writeLongString(int client,const char* longString, size_t len)
 	/* printf("Sent  %d\n",sent); */
 	return sent;
 }
-
 
 
 /**********************************************************************/
