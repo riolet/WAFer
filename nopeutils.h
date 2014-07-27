@@ -47,6 +47,9 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
+#ifdef __APPLE__
+	#include <sys/uio.h>
+#endif
 char ** readHeaders(int);
 void freeHeaders(char **);
 int getLine(int, char *, int);
