@@ -38,6 +38,10 @@ char * getQueryParam(const char * queryString, const char *name) {
 
 
 	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
+		if (value == NULL) {
+			printf("Could not allocate memory.");
+			EXIT_FAILURE;
+		}
 	int i;
 
 	buffer=bufferQuestion;
@@ -119,6 +123,10 @@ long nprintf (int client, const char *format, ...) {
 
 		/* initial buffer large enough for most cases, will resize if required */
 		char *buf = malloc(MAX_BUFFER_SIZE);
+		if (buf == NULL) {
+			printf("Could not allocate memory.");
+			EXIT_FAILURE;
+		}
 		int len;
 
 		va_list arg;
@@ -131,6 +139,10 @@ long nprintf (int client, const char *format, ...) {
 			/* buffer size was not enough */
 			free(buf);
 			buf = malloc(len+1);
+			if (buf == NULL) {
+				printf("Could not allocate memory.");
+				EXIT_FAILURE;
+			}
 			va_start (arg, format);
 			vsnprintf (buf, len+1, format, arg);
 			va_end (arg);
@@ -162,6 +174,10 @@ char ** readHeaders(int client) {
 
 	/* printf("Mallocing %ld \n",sizeof(char*)*MAX_HEADERS); */
 	headers=malloc(sizeof(char*)*MAX_HEADERS);
+		if (*headers == NULL) {
+			printf("Could not allocate memory.");
+			EXIT_FAILURE;
+		}
 
 
 	numchars = getLine(client, buf, sizeof(buf));
@@ -169,6 +185,10 @@ char ** readHeaders(int client) {
 	while ((numchars > 0) && strcmp("\n", buf)) {
 		/* printf("Numchars %d %s\n",numchars,buf); */
 		headers[i]=malloc((numchars+1)*sizeof(char));
+		if (headers[i] == NULL) {
+			printf("Could not allocate memory.");
+			EXIT_FAILURE;
+		}
 		memcpy(headers[i],buf,numchars);
 		headers[i][numchars]=0;
 		i++;
