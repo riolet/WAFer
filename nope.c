@@ -34,17 +34,6 @@
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
 
-#define COPY_BUF_TO_READ_BUFFER \
-	if (!read) {\
-		if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {\
-			memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);\
-			fdData[i].readBufferLen += nbytes;\
-			read = true;\
-		} else {\
-			return; /* How big do you want your request to be?? */\
-		}\
-	}
-
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
 	if (isspace(fdData[i].readBuffer[j])) {\
 		_str_[idx]=0;\
@@ -277,8 +266,8 @@ int open_listenfd(int port){
 
 void log_access(int status, struct sockaddr_in *c_addr, http_request *req)
 {
-	printf("%s:%d %d - %s\n", inet_ntoa(c_addr->sin_addr),
-	       ntohs(c_addr->sin_port), status, req->filename);
+	printf("%s:%d %d - %s\n", c_addr ? inet_ntoa(c_addr->sin_addr) : "unknown",
+	       c_addr ? ntohs(c_addr->sin_port) : -1, status, req->filename);
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -290,7 +279,7 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void accept_connection(FdData *fds, int i, int listenfd, int fdmax, fd_set *master, char *remote_ip)
+void accept_connection(FdData *fds, int i, int listenfd, char *remote_ip, int *fdmax, fd_set *master)
 {
 	socklen_t addrlen;
 	struct sockaddr_storage remoteaddr; // client address
@@ -310,8 +299,8 @@ void accept_connection(FdData *fds, int i, int listenfd, int fdmax, fd_set *mast
 		perror("accept");
 	} else {
 		FD_SET(newfd, master); // add to master set
-		if (newfd > fdmax) {    // keep track of the max
-			fdmax = newfd;
+		if (newfd > *fdmax) {    // keep track of the max
+			*fdmax = newfd;
 		}
 		printf("selectserver: new connection from %s on "
 		       "socket %d\n",
@@ -319,14 +308,15 @@ void accept_connection(FdData *fds, int i, int listenfd, int fdmax, fd_set *mast
 				 get_in_addr((struct sockaddr*)&remoteaddr),
 				 remote_ip, INET6_ADDRSTRLEN),
 		       newfd);
-		fds[i].state = STATE_PRE_REQUEST;
+		fds[newfd].state = STATE_PRE_REQUEST;
+		new_fd_data(&fds[newfd]);
 	}
 }
 
 void shutdown_connection(FdData *fds, int i, ssize_t nbytes, fd_set *master)
 {
 	/* got error or connection closed by client */
-	if (nbytes < 0) {
+	if (nbytes == 0) {
 		/* connection closed */
 		printf("selectserver: socket %d hung up\n", i);
 	} else {
@@ -348,7 +338,6 @@ void select_loop(int listenfd)
 	Request request;
 
 
-	char buf[MAX_BUFFER_SIZE];    // buffer for client data
 	int nbytes;
 
 	char remote_ip[INET6_ADDRSTRLEN];
@@ -384,30 +373,23 @@ void select_loop(int listenfd)
 			if (!FD_ISSET(i, &read_fds)) // we got one!!
 				continue;
 			if (i == listenfd) {
-				accept_connection(fdData, i, listenfd, fdmax, &master, remote_ip);
-				continue;
+				accept_connection(fdData, i, listenfd, remote_ip, &fdmax, &master);
+				break;
 			}
-			nbytes = recv(i, buf, sizeof buf, 0);
+			nbytes = recv(i, fdData[i].readBuffer, MAX_REQUEST_SIZE - fdData[i].readBufferIdx, 0);
 			/* read failure */
 			if (nbytes <= 0) {
 				shutdown_connection(fdData, i, nbytes, &master);
-				continue;
+				break;
 			}
+			fdData[i].readBufferLen += nbytes;
 
 			/* we got some data from a client */
-			bool read = false;
-			switch (fdData[i].state) {
-			case STATE_PRE_REQUEST:
-				new_fd_data(&fdData[i]);
-				memcpy(fdData[i].readBuffer,buf,nbytes);
-				fdData[i].readBufferLen += nbytes;
-				read = true;
+			if (fdData[i].state == STATE_PRE_REQUEST) {
 				fdData[i].state = STATE_METHOD;
-				break;
+			}
 
-			case STATE_METHOD:
-				COPY_BUF_TO_READ_BUFFER
-
+			if (fdData[i].state == STATE_METHOD) {
 				idx = fdData[i].methodIdx;
 				j = fdData[i].readBufferIdx;
 				len = fdData[i].readBufferLen;
@@ -415,10 +397,10 @@ void select_loop(int listenfd)
 				while (j<len && idx<MAX_METHOD_SIZE)
 				{
 					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_HEADER)
-							else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
-								else ON_SLASH_R_IGNORE
-									else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
-										j++;
+					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
+					else ON_SLASH_R_IGNORE
+					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
+					j++;
 				}
 
 				fdData[i].methodIdx = idx;
@@ -428,11 +410,9 @@ void select_loop(int listenfd)
 					fdData[i].method[idx]=0;
 					fdData[i].state = STATE_URI;
 				}
-				break;
+			}
 
-			case STATE_URI:
-				COPY_BUF_TO_READ_BUFFER
-
+			if (fdData[i].state == STATE_URI) {
 				idx = fdData[i].uriIdx;
 				j = fdData[i].readBufferIdx;
 				len = fdData[i].readBufferLen;
@@ -453,12 +433,10 @@ void select_loop(int listenfd)
 					fdData[i].uri[idx]=0;
 					fdData[i].state = STATE_VERSION;
 				}
-				break;
+			}
 
-			case STATE_VERSION:
-				COPY_BUF_TO_READ_BUFFER
-
-						idx = fdData[i].verIdx;
+			if (fdData[i].state == STATE_VERSION) {
+				idx = fdData[i].verIdx;
 				j = fdData[i].readBufferIdx;
 				len = fdData[i].readBufferLen;
 
@@ -477,11 +455,10 @@ void select_loop(int listenfd)
 					fdData[i].ver[idx]=0;
 					fdData[i].state = STATE_HEADER;
 				}
-				break;
+			}
 
-			case STATE_HEADER:
-				COPY_BUF_TO_READ_BUFFER
-
+			if (fdData[i].state == STATE_HEADER) {
+				get_data(&fdData[i]);
 				idx = fdData[i].withinHeaderIdx;
 				j = fdData[i].readBufferIdx;
 				len = fdData[i].readBufferLen;
@@ -518,9 +495,9 @@ void select_loop(int listenfd)
 
 				fdData[i].withinHeaderIdx = idx;
 				fdData[i].readBufferIdx = j;
-				break;
+			}
 
-			case STATE_COMPLETE_READING:
+			if (fdData[i].state == STATE_COMPLETE_READING) {
 				request.client = i;
 				request.reqStr = fdData[i].uri;
 				request.method = fdData[i].method;
@@ -537,7 +514,6 @@ void select_loop(int listenfd)
 				printf("A job well done on %d\n",i);
 				close(i); // bye!
 				FD_CLR(i, &master); // remove from master set
-				break;
 			}
 		} // END looping through file descriptors
 	} // END for(;;)--and you thought it would never end!
@@ -547,8 +523,8 @@ void select_loop(int listenfd)
 
 int main(void){
 	int i;
-	int default_port = 4242;
-	int nChildren = 15;
+	int default_port = 8080;
+	int nChildren = 0;
 	int listenfd;
 
 	char* pPort = getenv ("PORT");
