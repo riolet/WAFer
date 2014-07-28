@@ -1,6 +1,16 @@
 #ifndef NOPEUTILS_H_
 #define NOPEUTILS_H_
 
+#include <stdarg.h>
+#include <stdlib.h>
+
+
+#define NOPE_MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define NOPE_MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+/* To boolean or not to boolean */
+typedef int bool;
+
 /* ENTL */
 #define STR(X) #X
 #define WSPC " "
@@ -45,6 +55,10 @@
 
 #define STATIC_SEND(_socket, _str, _flags) send(_socket, _str, sizeof(_str)-1, _flags)
 
+bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen);
+#define STREQLIT(var,lit) stringEqualsLitLen(var,lit,sizeof lit)
+
+
 #include <stdarg.h>
 #include <stdlib.h>
 #ifdef __APPLE__
@@ -79,17 +93,30 @@ char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char
 #define MAX_HEADERS 1024
 #define MAX_BUFFER_SIZE 1024
 #define MAX_DPRINTF_SIZE 64
+#define MAX_FD_SIZE 1024
+#define MAX_METHOD_SIZE 64
+#define MAX_VER_SIZE 64
+#define MAX_REQUEST_SIZE 8192
 #define true 1
 #define false 0
 
-typedef int bool;
+#define STATE_PRE_REQUEST 0
+#define STATE_METHOD 1
+#define STATE_URI 2
+#define STATE_VERSION 3
+#define STATE_HEADER 4
+#define STATE_COMPLETE_READING 5
+
+#define STATUS_HTTP_OK 200
+
 
 typedef struct struct_request Request;
 
 struct struct_request {
 	int client;
-	const char * reqStr;
-	const char * method;
+	char * reqStr;
+	char * method;
+	char **headers;
 };
 
 bool route(Request request, const char * path);

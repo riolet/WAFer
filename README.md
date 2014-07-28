@@ -15,3 +15,5 @@ Acknowledgements:
 
 2. [Mark Karpeles](https://github.com/MagicalTux) for the incredible number of bug fixes!
 
+3. [Fine folks at /r/programming](http://www.reddit.com/r/programming/) for the honest and constructive feedback.
+
