@@ -274,7 +274,7 @@ void process(int fd,  fd_set *pMaster, struct sockaddr_in *clientaddr){
 	close(client);
 
 	http_request req;
-	strcpy(req.filename,url);
+	strncpy(req.filename, url, sizeof req.filename);
     log_access(status, clientaddr, &req);
 }
 
