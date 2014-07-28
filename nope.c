@@ -29,6 +29,43 @@
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
+#define FOREVER for(;;)
+
+#define COPY_BUF_TO_READ_BUFFER\
+		if (!read) {\
+			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {\
+				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);\
+				fdData[i].readBufferLen += nbytes;\
+				read=true;\
+			} else {\
+				return; /* How big do you want your request to be?? */\
+			}\
+		}
+
+#define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
+		if (ISspace(fdData[i].readBuffer[j])) {\
+						_str_[idx]=0;\
+						fdData[i].state=_state_;\
+						j++;\
+						break;\
+		}
+
+#define ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
+                    			if (fdData[i].readBuffer[j]=='\n') {\
+                         			_str_[idx]=0;\
+                            		fdData[i].state=_state_;\
+                            		j++;\
+                            		break;\
+                    			}
+
+#define ON_SLASH_R_IGNORE\
+	if (fdData[i].readBuffer[j]=='\r') { /*Do nothing*/ }
+
+#define ON_EVERYTHING_ELSE_CONSUME(_str_)\
+	{\
+		_str_[idx] = fdData[i].readBuffer[j];\
+		idx++;\
+	}
 
 typedef struct {
     short int state;
@@ -45,6 +82,42 @@ typedef struct {
     short headersIdx;
     short withinHeaderIdx;
 } FdData;
+
+newFdData(FdData *fdData) {
+	fdData->state=STATE_PRE_REQUEST;
+	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
+	fdData->uri=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fdData->headers=malloc(MAX_HEADERS*sizeof(char*));
+	fdData->ver=malloc(MAX_HEADERS*sizeof(char*));
+	fdData->readBufferIdx=0;
+	fdData->readBufferLen=0;
+	fdData->readBufferIdx=0;
+	fdData->methodIdx=0;
+	fdData->uriIdx=0;
+	fdData->verIdx=0;
+	fdData->headersIdx=0;
+	fdData->headers[fdData->headersIdx]=NULL;
+	fdData->withinHeaderIdx=0;
+}
+
+freeFdData(FdData *fdData) {
+
+	free(fdData->readBuffer);
+	free(fdData->method);
+	free(fdData->uri);
+	freeHeaders(fdData->headers);
+	free(fdData->ver);
+	fdData->readBufferIdx=0;
+	fdData->readBufferLen=0;
+	fdData->readBufferIdx=0;
+	fdData->methodIdx=0;
+	fdData->uriIdx=0;
+	fdData->verIdx=0;
+	fdData->headersIdx=0;
+	fdData->headers[fdData->headersIdx]=NULL;
+	fdData->withinHeaderIdx=0;
+}
 
 typedef struct {
     int rio_fd;                 /* descriptor for this buf */
@@ -215,41 +288,6 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-newFdData(FdData *fdData) {
-	fdData->state=STATE_PRE_REQUEST;
-	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
-	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
-	fdData->uri=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
-	fdData->headers=malloc(MAX_HEADERS*sizeof(char*));
-	fdData->ver=malloc(MAX_HEADERS*sizeof(char*));
-	fdData->readBufferIdx=0;
-	fdData->readBufferLen=0;
-	fdData->readBufferIdx=0;
-	fdData->methodIdx=0;
-	fdData->uriIdx=0;
-	fdData->verIdx=0;
-	fdData->headersIdx=0;
-	fdData->headers[fdData->headersIdx]=NULL;
-	fdData->withinHeaderIdx=0;
-}
-
-freeFdData(FdData *fdData) {
-
-	free(fdData->readBuffer);
-	free(fdData->method);
-	free(fdData->uri);
-	free(fdData->headers);
-	free(fdData->ver);
-	fdData->readBufferIdx=0;
-	fdData->readBufferLen=0;
-	fdData->readBufferIdx=0;
-	fdData->methodIdx=0;
-	fdData->uriIdx=0;
-	fdData->verIdx=0;
-	fdData->headersIdx=0;
-	fdData->headers[fdData->headersIdx]=NULL;
-	fdData->withinHeaderIdx=0;
-}
 void selectLoop(int listener)
 {
 	/* Thank you Brian "Beej Jorgensen" Hall */
@@ -270,47 +308,38 @@ void selectLoop(int listener)
 
     struct addrinfo hints, *ai, *p;
 
-    FD_ZERO(&master);    // clear the master and temp sets
+    FD_ZERO(&master);    /* clear the master and temp sets */
     FD_ZERO(&read_fds);
 
-    // add the listener to the master set
+    /* add the listener to the master set */
     FD_SET(listener, &master);
 
-    // keep track of the biggest file descriptor
-    fdmax = listener; // so far, it's this one
+    /* keep track of the biggest file descriptor */
+    fdmax = listener; /* so far, it's this one */
 
     FdData fdData[MAX_FD_SIZE];
     for (i=0;i<fdmax;i++) {
     	fdData[i].state=STATE_PRE_REQUEST;
     }
 
-    /*
-    short int state[MAX_FD_SIZE];
-    char *readBuffer[MAX_FD_SIZE];
-    short int readBufferIdx[MAX_FD_SIZE];
-    char *method[MAX_FD_SIZE];
-    char *uri[MAX_FD_SIZE];
-    char **headers[MAX_FD_SIZE];
-     */
-
-    // main loop
+    /* main loop */
     char printBuffer[1024];
     char *method;
     char *uri;
     int idx,j,len;
 
-    for(;;) {
-        read_fds = master; // copy it
+    FOREVER {
+        read_fds = master; /* copy it */
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("select");
             exit(4);
         }
 
-        // run through the existing connections looking for data to read
+        /* run through the existing connections looking for data to read */
         for(i = 0; i <= fdmax; i++) {
             if (FD_ISSET(i, &read_fds)) { // we got one!!
                 if (i == listener) {
-                    // handle new connections
+                    /* handle new connections */
                     addrlen = sizeof remoteaddr;
                     newfd = accept(listener,
                         (struct sockaddr *)&remoteaddr,
@@ -336,25 +365,21 @@ void selectLoop(int listener)
                         fdData[i].state=STATE_PRE_REQUEST;
                     }
                 } else {
-                    // handle data from a client
+                    /* handle data from a client */
                     if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
-                        // got error or connection closed by client
+                        /* got error or connection closed by client */
                         if (nbytes == 0) {
-                            // connection closed
+                           /* connection closed */
                             printf("selectserver: socket %d hung up\n", i);
                         } else {
                             perror("recv");
                         }
                 	    freeFdData(&fdData[i]);
                 	    fdData[i].state=STATE_PRE_REQUEST;
-                        close(i); // bye!
-                        FD_CLR(i, &master); // remove from master set
+                        close(i);
+                        FD_CLR(i, &master); /* remove from master set */
                     } else {
-                    	// we got some data from a client
-                    	/*
-                    	snprintf(printBuffer,NOPE_MIN(sizeof(printBuffer),nbytes),"%s",buf);
-                    	printf("Received %d as ASCII %d STRING %s \n",nbytes,printBuffer[0],printBuffer);
-                    	*/
+                    	/* we got some data from a client */
                     	bool read=false;
                     	if (fdData[i].state==STATE_PRE_REQUEST) {
                     		newFdData(&fdData[i]);
@@ -365,17 +390,8 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_METHOD) {
-                    		/*
-                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
-                    		printf("STATE=METHOD -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
-                    		*/
-                    		if (!read) {
-                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
-                    				fdData[i].readBufferLen += nbytes;
-                    				read=true;
-                    			}
-                    		}
+
+                    		COPY_BUF_TO_READ_BUFFER
 
                     		idx=fdData[i].methodIdx;
                     		j=fdData[i].readBufferIdx;
@@ -383,22 +399,10 @@ void selectLoop(int listener)
 
                     		while (j<len && idx<MAX_METHOD_SIZE)
                     		{
-                    			if (fdData[i].readBuffer[j]=='\n') {
-                         			fdData[i].method[idx]=0;
-                            		fdData[i].state=STATE_HEADER;
-                            		j++;
-                            		break;
-                    			} else if (ISspace(fdData[i].readBuffer[j])) {
-                        			fdData[i].method[idx]=0;
-                        			fdData[i].state=STATE_URI;
-                        			j++;
-                        			break;
-                        		} else if (fdData[i].readBuffer[j]=='\r') {
-                        			/*Skip over \r */
-                    			} else {
-                    				fdData[i].method[idx] = fdData[i].readBuffer[j];
-                    				idx++;
-                    			}
+								ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_HEADER)
+								else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
+                    			else ON_SLASH_R_IGNORE
+                    			else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
                     			j++;
                     		}
 
@@ -413,14 +417,8 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_URI) {
-                    		/* printf("Method of %d is %s\n",i,fdData[i].method); */
-                    		if (!read) {
-                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
-                    				fdData[i].readBufferLen += nbytes;
-                    				read=true;
-                    			}
-                    		}
+
+                    		COPY_BUF_TO_READ_BUFFER
 
                     		idx=fdData[i].uriIdx;
                     		j=fdData[i].readBufferIdx;
@@ -428,22 +426,10 @@ void selectLoop(int listener)
 
                     		while (j<len && idx<MAX_REQUEST_SIZE)
                     		{
-                    			if (fdData[i].readBuffer[j]=='\n') {
-                         			fdData[i].uri[idx]=0;
-                            		fdData[i].state=STATE_HEADER;
-                            		j++;
-                            		break;
-                    			} else if (ISspace(fdData[i].readBuffer[j])) {
-                        			fdData[i].uri[idx]=0;
-                        			fdData[i].state=STATE_VERSION;
-                        			j++;
-                        			break;
-                        		} else if (fdData[i].readBuffer[j]=='\r') {
-                        			/*Skip over \r */
-                    			} else {
-                    				fdData[i].uri[idx] = fdData[i].readBuffer[j];
-                    				idx++;
-                    			}
+                    			ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_HEADER)
+								else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_VERSION)
+                    			else ON_SLASH_R_IGNORE
+                    			else ON_EVERYTHING_ELSE_CONSUME(fdData[i].uri)
                     			j++;
                     		}
 
@@ -458,21 +444,8 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_VERSION) {
-                    		/*
-                    		printf("URI of %d is %s\n",i,fdData[i].uri);
-                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
-                    		*/
-                    		//printf("STATE=VERSION -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
 
-                    		if (!read) {
-                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
-                    				fdData[i].readBufferLen += nbytes;
-                    				read=true;
-                    			} else {
-                    				return; /* How big do you want your request to be?? */
-                    			}
-                    		}
+                    		COPY_BUF_TO_READ_BUFFER
 
                     		idx=fdData[i].verIdx;
                     		j=fdData[i].readBufferIdx;
@@ -480,17 +453,9 @@ void selectLoop(int listener)
 
                     		while (j<len && idx<MAX_VER_SIZE)
                     		{
-                    			if (fdData[i].readBuffer[j]=='\n') {
-                         			fdData[i].ver[idx]=0;
-                            		fdData[i].state=STATE_HEADER;
-                            		j++;
-                            		break;
-                    			} else if (fdData[i].readBuffer[j]=='\r') {
-                        			/*Skip over \r */
-                    			} else {
-                    				fdData[i].ver[idx] = fdData[i].readBuffer[j];
-                    				idx++;
-                    			}
+                    			ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].ver,STATE_HEADER)
+								else ON_SLASH_R_IGNORE
+								else ON_EVERYTHING_ELSE_CONSUME(fdData[i].ver)
                     			j++;
                     		}
                     		fdData[i].verIdx=idx;
@@ -505,28 +470,16 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_HEADER) {
-                    		/*
-                    		printf("VER of %d is %s\n",i,fdData[i].ver);
-                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
-                    		printf("STATE=HEADER -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
-                    		*/
-                    		if (!read) {
-                    			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
-                    				fdData[i].readBufferLen += nbytes;
-                    				read=true;
-                    			} else {
-                    				return; /* How big do you want your request to be?? */
-                    			}
-                    		}
 
+                    		COPY_BUF_TO_READ_BUFFER
+
+                    		idx=fdData[i].withinHeaderIdx;
                     		j=fdData[i].readBufferIdx,
                     		len=fdData[i].readBufferLen;
-                    		idx=fdData[i].withinHeaderIdx;
+
 
                     		while (j<len) {
-                    			 /* printf("idx %d j %d (%d) fdData[i].headersIdx %d char %c [%d]\n",
-                    				idx,j,len,fdData[i].headersIdx,fdData[i].readBuffer[j],fdData[i].readBuffer[j]); */
+
                     			if (fdData[i].readBuffer[j]=='\n') {
                     				if (idx==0) {
                     					fdData[i].state=STATE_COMPLETE_READING;
@@ -537,7 +490,7 @@ void selectLoop(int listener)
                     				if (fdData[i].headersIdx<MAX_HEADERS)
                     					fdData[i].headersIdx++;
                     				else {
-                    					/* OK, buddy, you have sent us MAX_HEADERS headers. I am done with headers */
+                    					/* OK, buddy, you have sent us MAX_HEADERS headers. That's all yer get */
                     					fdData[i].state=STATE_COMPLETE_READING;
                     					j++;
                     					break;

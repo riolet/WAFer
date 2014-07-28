@@ -102,25 +102,6 @@ char * getQueryPath(const char * reqString)
 	return queryPath;
 }
 
-/**********************************************************************/
-/* There's a bunch of headers that are exchanged at the beginning
- * between the web browser and the server. If you are ok with just
- * using the default, you may use this function
- * Parameters: the client
- * Returns: an array of headers */
-/**********************************************************************/
-char ** sendAndReceiveHeaders(int client)
-{
-	char **headers=readHeaders(client);
-	int i=0;
-	while (headers[i]!=NULL) {
-		printf("Header -> %s",headers[i]);
-		i++;
-	}
-	writeStandardHeaders(client);
-	return headers;
-}
-
 /* Just like fprintf, but writing to the socket instead of a
  * file.
  * Parameters: the client, format
@@ -156,27 +137,6 @@ long nprintf (int client, const char *format, ...) {
 
 		free(buf);
 		return done;
-}
-
-/**********************************************************************/
-/* There's a bunch of headers that browsers send us.
- * This function reads 'em.
- * Parameters: the client
- * Returns: an array of headers */
-/**********************************************************************/
-
-char ** readHeaders(int client) {
-	/*We don't read headers here anymore */
-
-
-	char buf[MAX_BUFFER_SIZE];
-	char **headers;
-
-	/*TODO: We are leaving this for backward compatibility */
-	headers=malloc(sizeof(char*)*1);
-	headers[0]=0;
-	return headers;
-	/* End rant */
 }
 
 /* Free thy mallocs */
@@ -390,9 +350,7 @@ bool routeh(Request request, const char * path) {
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
 		free(queryPath);
-		char ** headers = sendAndReceiveHeaders(request.client);
-		if (headers)
-			freeHeaders(headers);
+		writeStandardHeaders(request.client);
 		return true;
 	} else {
 		free(queryPath);
@@ -416,10 +374,8 @@ bool routefh(Request request, const char * path, void (* function)(int,const cha
 	char * queryPath = getQueryPath(request.reqStr);
 	if (strcmp(queryPath,path)==0) {
 		free(queryPath);
-		char ** headers = sendAndReceiveHeaders(request.client);
+		writeStandardHeaders(request.client);
 		function(request.client,request.reqStr,request.method);
-		if (headers)
-			freeHeaders(headers);
 		return true;
 	} else {
 		free(queryPath);

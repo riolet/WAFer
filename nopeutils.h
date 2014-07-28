@@ -109,9 +109,9 @@ typedef struct struct_request Request;
 
 struct struct_request {
 	int client;
-	const char * reqStr;
-	const char * method;
-	const char **headers;
+	char * reqStr;
+	char * method;
+	char **headers;
 };
 
 bool route(Request request, const char * path);
