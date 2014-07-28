@@ -51,13 +51,13 @@ char * getQueryParam(const char * queryString, const char *name) {
 	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
 		if (value == NULL) {
 			printf("Could not allocate memory.");
-			EXIT_FAILURE;
+			exit(EXIT_FAILURE);
 		}
 	int i;
 
 	buffer=bufferQuestion;
 	pos1 = strstr(queryString,bufferQuestion);
-	printf ("Buffer %s Pos %d\n",buffer,pos1);
+	printf ("Buffer %s Pos %s\n",buffer,pos1);
     if (!pos1) {
     	buffer=bufferAmpersand;
         pos1 = strstr(queryString, bufferAmpersand);
@@ -130,7 +130,7 @@ long nprintf (int client, const char *format, ...) {
 			buf = malloc(len+1);
 			if (buf == NULL) {
 				printf("Could not allocate memory.");
-				EXIT_FAILURE;
+				exit(EXIT_FAILURE);
 			}
 			va_start (arg, format);
 			vsnprintf (buf, len+1, format, arg);

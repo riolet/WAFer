@@ -523,8 +523,7 @@ void selectLoop(int listener)
 
                     		http_request req;
                     		snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
-                    		char * clientaddr = "TODO";
-                    	    log_access(STATUS_HTTP_OK, clientaddr, &req);
+                    	    log_access(STATUS_HTTP_OK, NULL, &req);
                     	    if (fdData[i].state!=STATE_PRE_REQUEST)
                     	    	freeFdData(&fdData[i]);
                     	    fdData[i].state=STATE_PRE_REQUEST;
@@ -543,13 +542,9 @@ void selectLoop(int listener)
 
 int main(void){
 	int i;
-    struct sockaddr_in clientaddr;
-    int default_port = 4242,
-    	nChildren = 15,
-        listenfd,
-        connfd;
-
-    socklen_t clientlen = sizeof clientaddr;
+    int default_port = 4242;
+    int nChildren = 15;
+    int listenfd;
 
     char* pPort = getenv ("PORT");
 

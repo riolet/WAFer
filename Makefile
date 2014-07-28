@@ -2,7 +2,7 @@
 
 CC=gcc
 AR=ar
-CFLAGS=-W -Wall -O2
+CFLAGS=-W -Wall -O2 -Werror -Wno-unused-parameter
 LIBNOPE_OBJ=nope.o nopeutils.o
 LIBNOPE=libnope.a
 MODULES=server factor
