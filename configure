@@ -1,0 +1,58 @@
+#!/bin/sh
+
+for i in `seq 300`; do
+    echo "Lots of output to emulate automake... ok"
+    echo "Testing for things you'll never use... fail"
+    echo "Satisfying the fortran77 lobby... ok"
+    echo "Burning CPU time checking for the bloody obvious... ok"
+done
+echo "Automake emulated successfully"
+
+INST_ROOT='/usr/local'
+prefix="/usr/local"
+
+for arg in $*; do
+    shift 1
+    case $arg in
+        "--prefix" | "-p") 
+            prefix=shift $*
+            ;;
+        --prefix=*)
+            prefix=`echo $arg | sed 's/^--prefix=//g'`
+            ;;
+        "--help" | "-h") 
+            echo "Usage:"
+            echo "      --prefix | -p: The prefix to install to"
+            break;
+            ;;
+        *) echo "Unrecognized argument $arg";;
+    esac
+done
+
+OS=`uname`
+
+echo export INST_ROOT=$prefix > config.mk
+case $OS in
+    *Linux*)
+        echo 'export SYS=linux' >> config.mk
+        ;;
+    *Darwin*)
+        echo 'export SYS=osx' >> config.mk
+        ;;
+    *)
+        echo ''
+        echo ''
+        echo '********************************'
+        echo 'Unknown architecture.'
+        echo 'Cannot build'
+        echo '********************************'
+        rm -f config.h config.mk
+        exit 1
+        ;;
+esac
+
+cat << EOF
+    Building with:
+        prefix=$prefix
+EOF
+
