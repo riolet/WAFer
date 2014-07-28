@@ -34,6 +34,9 @@
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
 
+#define DEFAULT_PORT 4242
+#define DEFAULT_N_CHILDREN 15
+
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
 	if (isspace(fdData[i].readBuffer[j])) {\
 		_str_[idx]=0;\
@@ -522,8 +525,8 @@ void select_loop(int listenfd)
 
 int main(void){
 	int i;
-	int default_port = 8080;
-	int nChildren = 0;
+	int default_port = DEFAULT_PORT;
+	int nChildren = DEFAULT_N_CHILDREN;
 	int listenfd;
 
 	char* pPort = getenv ("PORT");

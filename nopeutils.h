@@ -55,6 +55,8 @@ typedef int bool;
 
 #define STATIC_SEND(_socket, _str, _flags) send(_socket, _str, sizeof(_str)-1, _flags)
 
+#define NPRINT(_socket, _str) STATIC_SEND(_socket, _str,0)
+
 bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen);
 #define STREQLIT(var,lit) stringEqualsLitLen(var,lit,sizeof lit)
 
