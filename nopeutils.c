@@ -77,19 +77,32 @@ char * getQueryParam(const char * queryString, const char *name) {
  * Parameters: the query string
  * Returns: the query path */
 /**********************************************************************/
-
 char * getQueryPath(const char * reqString)
-{ 
-	char * queryPath;
-	queryPath = strdup(reqString);
-	u_int i;
-	for (i=0;i<strlen(reqString) && (queryPath[i] != '?') && (queryPath[i] != '\0');i++) {
-	}
+{
+    int qIndex;
+    char * queryPath = malloc(strlen(reqString)+1);
+    if (queryPath == NULL) return NULL;
 
-	queryPath[i] = '\0';
-
-	return queryPath;
+    memcpy(queryPath, reqString, strlen(reqString)+1);
+    while(queryPath++) {
+        if (*queryPath == '/' && *(queryPath-1) != '/' && *(queryPath-1) != ':') {
+            queryPath++;
+            break;
+        } else if (*queryPath == '\0') {
+            break;
+        }
+    }
+    if (queryPath) {
+        if ((strstr(queryPath, "?"))) {
+            qIndex = strstr(queryPath, "?")-queryPath;
+            queryPath[qIndex] = '\0';
+        }
+    } else {
+        memcpy(queryPath, UNDEFINED, sizeof(UNDEFINED)+1);
+    }
+    return queryPath;
 }
+
 
 /**********************************************************************/
 /* There's a bunch of headers that are exchanged at the beginning
