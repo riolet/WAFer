@@ -30,8 +30,6 @@
 #include "server.h"
 #include "nopeutils.h"
 
-#define ISspace(x) isspace((int)(x))
-
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
 #define RIO_BUFSIZE 1024
@@ -48,7 +46,7 @@
 	}
 
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-	if (ISspace(fdData[i].readBuffer[j])) {\
+	if (isspace(fdData[i].readBuffer[j])) {\
 		_str_[idx]=0;\
 		fdData[i].state = _state_;\
 		j++;\
@@ -292,21 +290,68 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void select_loop(int listener)
+void accept_connection(FdData *fds, int i, int listenfd, int fdmax, fd_set *master, char *remote_ip)
+{
+	socklen_t addrlen;
+	struct sockaddr_storage remoteaddr; // client address
+	int newfd;        // newly accept()ed socket descriptor
+
+	/* handle new connections */
+	addrlen = sizeof remoteaddr;
+	newfd = accept(listenfd,
+		       (struct sockaddr *)&remoteaddr,
+		       &addrlen);
+	if (newfd>MAX_FD_SIZE) {
+		fprintf(stderr,"Max FD Size reached. Can't continue");
+		return;
+	}
+
+	if (newfd == -1) {
+		perror("accept");
+	} else {
+		FD_SET(newfd, master); // add to master set
+		if (newfd > fdmax) {    // keep track of the max
+			fdmax = newfd;
+		}
+		printf("selectserver: new connection from %s on "
+		       "socket %d\n",
+		       inet_ntop(remoteaddr.ss_family,
+				 get_in_addr((struct sockaddr*)&remoteaddr),
+				 remote_ip, INET6_ADDRSTRLEN),
+		       newfd);
+		fds[i].state = STATE_PRE_REQUEST;
+	}
+}
+
+void shutdown_connection(FdData *fds, int i, ssize_t nbytes, fd_set *master)
+{
+	/* got error or connection closed by client */
+	if (nbytes < 0) {
+		/* connection closed */
+		printf("selectserver: socket %d hung up\n", i);
+	} else {
+		perror("recv");
+	}
+	if (fds[i].state != STATE_PRE_REQUEST)
+		free_fd_data(&fds[i]);
+	fds[i].state = STATE_PRE_REQUEST;
+	FD_CLR(i, master); /* remove from master set */
+	close(i);
+}
+
+void select_loop(int listenfd)
 {
 	/* Thank you Brian "Beej Jorgensen" Hall */
 	fd_set master;    // master file descriptor list
 	fd_set read_fds;  // temp file descriptor list for select()
 	int fdmax;        // maximum file descriptor number
+	Request request;
 
-	int newfd;        // newly accept()ed socket descriptor
-	struct sockaddr_storage remoteaddr; // client address
-	socklen_t addrlen;
 
 	char buf[MAX_BUFFER_SIZE];    // buffer for client data
 	int nbytes;
 
-	char remoteIP[INET6_ADDRSTRLEN];
+	char remote_ip[INET6_ADDRSTRLEN];
 
 	int i;
 
@@ -314,10 +359,10 @@ void select_loop(int listener)
 	FD_ZERO(&read_fds);
 
 	/* add the listener to the master set */
-	FD_SET(listener, &master);
+	FD_SET(listenfd, &master);
 
 	/* keep track of the biggest file descriptor */
-	fdmax = listener; /* so far, it's this one */
+	fdmax = listenfd; /* so far, it's this one */
 
 	FdData fdData[MAX_FD_SIZE];
 	for (i = 0;i<fdmax;i++) {
@@ -336,204 +381,164 @@ void select_loop(int listener)
 
 		/* run through the existing connections looking for data to read */
 		for(i = 0; i <= fdmax; i++) {
-			if (FD_ISSET(i, &read_fds)) { // we got one!!
-				if (i == listener) {
-					/* handle new connections */
-					addrlen = sizeof remoteaddr;
-					newfd = accept(listener,
-						       (struct sockaddr *)&remoteaddr,
-						       &addrlen);
-					if (newfd>MAX_FD_SIZE) {
-						fprintf(stderr,"Max FD Size reached. Can't continue");
-						return;
-					}
+			if (!FD_ISSET(i, &read_fds)) // we got one!!
+				continue;
+			if (i == listenfd) {
+				accept_connection(fdData, i, listenfd, fdmax, &master, remote_ip);
+				continue;
+			}
+			nbytes = recv(i, buf, sizeof buf, 0);
+			/* read failure */
+			if (nbytes <= 0) {
+				shutdown_connection(fdData, i, nbytes, &master);
+				continue;
+			}
 
-					if (newfd == -1) {
-						perror("accept");
-					} else {
-						FD_SET(newfd, &master); // add to master set
-						if (newfd > fdmax) {    // keep track of the max
-							fdmax = newfd;
-						}
-						printf("selectserver: new connection from %s on "
-						       "socket %d\n",
-						       inet_ntop(remoteaddr.ss_family,
-								 get_in_addr((struct sockaddr*)&remoteaddr),
-								 remoteIP, INET6_ADDRSTRLEN),
-						       newfd);
-						fdData[i].state = STATE_PRE_REQUEST;
-					}
-				} else {
-					/* handle data from a client */
-					if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
-						/* got error or connection closed by client */
-						if (nbytes == 0) {
-							/* connection closed */
-							printf("selectserver: socket %d hung up\n", i);
-						} else {
-							perror("recv");
-						}
-						if (fdData[i].state!=STATE_PRE_REQUEST)
-							free_fd_data(&fdData[i]);
-						fdData[i].state = STATE_PRE_REQUEST;
-						close(i);
-						FD_CLR(i, &master); /* remove from master set */
-					} else {
-						/* we got some data from a client */
-						bool read = false;
-						if (fdData[i].state == STATE_PRE_REQUEST) {
-							new_fd_data(&fdData[i]);
-							memcpy(fdData[i].readBuffer,buf,nbytes);
-							fdData[i].readBufferLen += nbytes;
-							read = true;
-							fdData[i].state = STATE_METHOD;
-						}
+			/* we got some data from a client */
+			bool read = false;
+			switch (fdData[i].state) {
+			case STATE_PRE_REQUEST:
+				new_fd_data(&fdData[i]);
+				memcpy(fdData[i].readBuffer,buf,nbytes);
+				fdData[i].readBufferLen += nbytes;
+				read = true;
+				fdData[i].state = STATE_METHOD;
+				break;
 
-						if (fdData[i].state == STATE_METHOD) {
+			case STATE_METHOD:
+				COPY_BUF_TO_READ_BUFFER
 
-							COPY_BUF_TO_READ_BUFFER
+				idx = fdData[i].methodIdx;
+				j = fdData[i].readBufferIdx;
+				len = fdData[i].readBufferLen;
 
-									idx = fdData[i].methodIdx;
-							j = fdData[i].readBufferIdx;
-							len = fdData[i].readBufferLen;
-
-							while (j<len && idx<MAX_METHOD_SIZE)
-							{
-								ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_HEADER)
-										else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
-											else ON_SLASH_R_IGNORE
-												else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
-													j++;
-							}
-
-							fdData[i].methodIdx = idx;
-							fdData[i].readBufferIdx = j;
-
-							if (idx == MAX_METHOD_SIZE) {	/*We don't like really long methods. Cut em off */
-								fdData[i].method[idx]=0;
-								fdData[i].state = STATE_URI;
-							}
-
-						}
-
-						if (fdData[i].state == STATE_URI) {
-
-							COPY_BUF_TO_READ_BUFFER
-
-									idx = fdData[i].uriIdx;
-							j = fdData[i].readBufferIdx;
-							len = fdData[i].readBufferLen;
-
-							while (j<len && idx<MAX_REQUEST_SIZE)
-							{
-								ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_HEADER)
-										else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_VERSION)
-											else ON_SLASH_R_IGNORE
-												else ON_EVERYTHING_ELSE_CONSUME(fdData[i].uri)
-													j++;
-							}
-
-							fdData[i].uriIdx = idx;
-							fdData[i].readBufferIdx = j;
-
-							if (idx == MAX_REQUEST_SIZE) {	/*We don't like really long URIs either. Cut em off */
-								fdData[i].uri[idx]=0;
-								fdData[i].state = STATE_VERSION;
-							}
-
-						}
-
-						if (fdData[i].state == STATE_VERSION) {
-
-							COPY_BUF_TO_READ_BUFFER
-
-									idx = fdData[i].verIdx;
-							j = fdData[i].readBufferIdx;
-							len = fdData[i].readBufferLen;
-
-							while (j<len && idx<MAX_VER_SIZE)
-							{
-								ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].ver,STATE_HEADER)
-										else ON_SLASH_R_IGNORE
-											else ON_EVERYTHING_ELSE_CONSUME(fdData[i].ver)
-												j++;
-							}
-							fdData[i].verIdx = idx;
-							fdData[i].readBufferIdx = j;
-
-							/*We don't like really long version either. Cut em off */
-							if (idx == MAX_VER_SIZE) {	/*We don't like really long URIs either. Cut em off */
-								fdData[i].ver[idx]=0;
-								fdData[i].state = STATE_HEADER;
-							}
-
-						}
-
-						if (fdData[i].state == STATE_HEADER) {
-
-							COPY_BUF_TO_READ_BUFFER
-
-									idx = fdData[i].withinHeaderIdx;
-							j = fdData[i].readBufferIdx,
-									len = fdData[i].readBufferLen;
-
-
-							while (j<len) {
-
-								if (fdData[i].readBuffer[j]=='\n') {
-									if (idx == 0) {
-										fdData[i].state = STATE_COMPLETE_READING;
+				while (j<len && idx<MAX_METHOD_SIZE)
+				{
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_HEADER)
+							else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
+								else ON_SLASH_R_IGNORE
+									else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
 										j++;
-										break; /* The last of headers */
-									}
-									fdData[i].headers[fdData[i].headersIdx][idx]=0;
-									if (fdData[i].headersIdx<MAX_HEADERS)
-										fdData[i].headersIdx++;
-									else {
-										/* OK, buddy, you have sent us MAX_HEADERS headers. That's all yer get */
-										fdData[i].state = STATE_COMPLETE_READING;
-										j++;
-										break;
-									}
-									fdData[i].headers[fdData[i].headersIdx]=NULL;
-									idx = 0;
-								} else if (fdData[i].readBuffer[j]=='\r') {
-									/*Skip over \r */
-								} else {
-									if (idx == 0)
-										fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
-									fdData[i].headers[fdData[i].headersIdx][idx] = fdData[i].readBuffer[j];
-									idx++;
-								}
-								j++;
-							}
+				}
 
-							fdData[i].withinHeaderIdx = idx;
-							fdData[i].readBufferIdx = j;
+				fdData[i].methodIdx = idx;
+				fdData[i].readBufferIdx = j;
+
+				if (idx == MAX_METHOD_SIZE) {	/*We don't like really long methods. Cut em off */
+					fdData[i].method[idx]=0;
+					fdData[i].state = STATE_URI;
+				}
+				break;
+
+			case STATE_URI:
+				COPY_BUF_TO_READ_BUFFER
+
+				idx = fdData[i].uriIdx;
+				j = fdData[i].readBufferIdx;
+				len = fdData[i].readBufferLen;
+
+				while (j<len && idx<MAX_REQUEST_SIZE)
+				{
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_HEADER)
+					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_VERSION)
+					else ON_SLASH_R_IGNORE
+					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].uri)
+					j++;
+				}
+
+				fdData[i].uriIdx = idx;
+				fdData[i].readBufferIdx = j;
+
+				if (idx == MAX_REQUEST_SIZE) {	/*We don't like really long URIs either. Cut em off */
+					fdData[i].uri[idx]=0;
+					fdData[i].state = STATE_VERSION;
+				}
+				break;
+
+			case STATE_VERSION:
+				COPY_BUF_TO_READ_BUFFER
+
+						idx = fdData[i].verIdx;
+				j = fdData[i].readBufferIdx;
+				len = fdData[i].readBufferLen;
+
+				while (j<len && idx<MAX_VER_SIZE)
+				{
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].ver,STATE_HEADER)
+					else ON_SLASH_R_IGNORE
+					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].ver)
+					j++;
+				}
+				fdData[i].verIdx = idx;
+				fdData[i].readBufferIdx = j;
+
+				/*We don't like really long version either. Cut em off */
+				if (idx == MAX_VER_SIZE) {	/*We don't like really long URIs either. Cut em off */
+					fdData[i].ver[idx]=0;
+					fdData[i].state = STATE_HEADER;
+				}
+				break;
+
+			case STATE_HEADER:
+				COPY_BUF_TO_READ_BUFFER
+
+				idx = fdData[i].withinHeaderIdx;
+				j = fdData[i].readBufferIdx;
+				len = fdData[i].readBufferLen;
+
+
+				while (j<len) {
+					if (fdData[i].readBuffer[j]=='\n') {
+						if (idx == 0) {
+							fdData[i].state = STATE_COMPLETE_READING;
+							j++;
+							break; /* The last of headers */
 						}
-
-						if (fdData[i].state == STATE_COMPLETE_READING) {
-							Request request;
-							request.client = i;
-							request.reqStr = fdData[i].uri;
-							request.method = fdData[i].method;
-							request.headers = fdData[i].headers;
-							server(request);
-							close(i);
-
-							http_request req;
-							snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
-							log_access(STATUS_HTTP_OK, NULL, &req);
-							if (fdData[i].state!=STATE_PRE_REQUEST)
-								free_fd_data(&fdData[i]);
-							fdData[i].state = STATE_PRE_REQUEST;
-							printf("A job well done on %d\n",i);
-							close(i); // bye!
-							FD_CLR(i, &master); // remove from master set
+						fdData[i].headers[fdData[i].headersIdx][idx]=0;
+						if (fdData[i].headersIdx<MAX_HEADERS)
+							fdData[i].headersIdx++;
+						else {
+							/* OK, buddy, you have sent us MAX_HEADERS headers. That's all yer get */
+							fdData[i].state = STATE_COMPLETE_READING;
+							j++;
+							break;
 						}
+						fdData[i].headers[fdData[i].headersIdx]=NULL;
+						idx = 0;
+					} else if (fdData[i].readBuffer[j]=='\r') {
+						/*Skip over \r */
+					} else {
+						if (idx == 0)
+							fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
+						fdData[i].headers[fdData[i].headersIdx][idx] = fdData[i].readBuffer[j];
+						idx++;
 					}
-				} // END handle data from client
-			} // END got new incoming connection
+					j++;
+				}
+
+				fdData[i].withinHeaderIdx = idx;
+				fdData[i].readBufferIdx = j;
+				break;
+
+			case STATE_COMPLETE_READING:
+				request.client = i;
+				request.reqStr = fdData[i].uri;
+				request.method = fdData[i].method;
+				request.headers = fdData[i].headers;
+				server(request);
+				close(i);
+
+				http_request req;
+				snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
+				log_access(STATUS_HTTP_OK, NULL, &req);
+				if (fdData[i].state!=STATE_PRE_REQUEST)
+					free_fd_data(&fdData[i]);
+				fdData[i].state = STATE_PRE_REQUEST;
+				printf("A job well done on %d\n",i);
+				close(i); // bye!
+				FD_CLR(i, &master); // remove from master set
+				break;
+			}
 		} // END looping through file descriptors
 	} // END for(;;)--and you thought it would never end!
 
