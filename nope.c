@@ -261,13 +261,12 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-initializeFdData(FdData *fdData) {
+newFdData(FdData *fdData) {
 	fdData->state=STATE_METHOD;
 	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
 	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
 	fdData->uri=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
 	fdData->headers=malloc(MAX_HEADERS*sizeof(char*));
-	fdData->headers[0]=malloc(MAX_BUFFER_SIZE*sizeof(char));
 	fdData->ver=malloc(MAX_HEADERS*sizeof(char*));
 	fdData->readBufferIdx=0;
 	fdData->readBufferLen=0;
@@ -276,9 +275,27 @@ initializeFdData(FdData *fdData) {
 	fdData->uriIdx=0;
 	fdData->verIdx=0;
 	fdData->headersIdx=0;
+	fdData->headers[fdData->headersIdx]=NULL;
 	fdData->withinHeaderIdx=0;
 }
 
+freeFdData(FdData *fdData) {
+
+	free(fdData->readBuffer);
+	free(fdData->method);
+	free(fdData->uri);
+	free(fdData->headers);
+	free(fdData->ver);
+	fdData->readBufferIdx=0;
+	fdData->readBufferLen=0;
+	fdData->readBufferIdx=0;
+	fdData->methodIdx=0;
+	fdData->uriIdx=0;
+	fdData->verIdx=0;
+	fdData->headersIdx=0;
+	fdData->headers[fdData->headersIdx]=NULL;
+	fdData->withinHeaderIdx=0;
+}
 void selectLoop(int listener)
 {
 	/* Thank you Brian "Beej Jorgensen" Hall */
@@ -382,7 +399,7 @@ void selectLoop(int listener)
                     	printf("Received %d as %s\n",nbytes,printBuffer);
                     	bool read=false;
                     	if (fdData[i].state==STATE_PRE_REQUEST) {
-                    		initializeFdData(&fdData[i]);
+                    		newFdData(&fdData[i]);
                     		memcpy(fdData[i].readBuffer,buf,nbytes);
                     		fdData[i].readBufferLen += nbytes;
                     		read=true;
@@ -411,7 +428,7 @@ void selectLoop(int listener)
                             		break;
                     			} else if (ISspace(fdData[i].readBuffer[j])) {
                         			fdData[i].method[idx]=0;
-                        			fdData[i].state=STATE_VERSION;
+                        			fdData[i].state=STATE_URI;
                         			break;
                         		} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
@@ -544,23 +561,29 @@ void selectLoop(int listener)
                     		while (j<len) {
                     			if (fdData[i].readBuffer[j]=='\n') {
                     				if (fdData[i].withinHeaderIdx==0) {
+                    					fdData[i].state=STATE_COMPLETE_READING;
                     					break; /* The last header */
                     				}
                     				fdData[i].headersIdx++;
-                         			fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
+                    				fdData[i].headers[fdData[i].headersIdx]=NULL;
                          			idx=fdData[i].withinHeaderIdx=0;
                             		break;
                     			} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
                     			} else {
+                    				if (idx==0)
+                    					fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
                     				fdData[i].ver[idx] = fdData[i].readBuffer[j];
                     				idx++;
                     			}
                     			j++;
                     		}
+
                     		fdData[i].withinHeaderIdx=idx;
                     		fdData[i].readBufferIdx=j+1;
+                    	}
 
+                    	if (fdData[i].state==STATE_COMPLETE_READING) {
                     		Request request;
                     		request.client=i;
                     		request.reqStr=fdData[i].uri;
@@ -573,7 +596,8 @@ void selectLoop(int listener)
                     		snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
                     		char * clientaddr = "TODO";
                     	    log_access(STATUS_HTTP_OK, clientaddr, &req);
-                    	    initializeFdData(&fdData[i]);
+                    	    freeFdData(&fdData[i]);
+                    	    newFdData(&fdData[i]);
                             close(i); // bye!
                             FD_CLR(i, &master); // remove from master set
                     	}
