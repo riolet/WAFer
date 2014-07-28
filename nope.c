@@ -10,7 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
-#include <sys/sendfile.h>
+#ifdef __APPLE__
+	#include <sys/uio.h>
+#else
+	#include <sys/sendfile.h>
+#endif
+
+
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -83,7 +89,7 @@ typedef struct {
     short withinHeaderIdx;
 } FdData;
 
-newFdData(FdData *fdData) {
+void newFdData(FdData *fdData) {
 	fdData->state=STATE_PRE_REQUEST;
 	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
 	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
@@ -101,8 +107,7 @@ newFdData(FdData *fdData) {
 	fdData->withinHeaderIdx=0;
 }
 
-freeFdData(FdData *fdData) {
-
+void freeFdData(FdData *fdData) {
 	free(fdData->readBuffer);
 	free(fdData->method);
 	free(fdData->uri);
@@ -115,7 +120,6 @@ freeFdData(FdData *fdData) {
 	fdData->uriIdx=0;
 	fdData->verIdx=0;
 	fdData->headersIdx=0;
-	fdData->headers[fdData->headersIdx]=NULL;
 	fdData->withinHeaderIdx=0;
 }
 
@@ -306,8 +310,6 @@ void selectLoop(int listener)
 
     int i;
 
-    struct addrinfo hints, *ai, *p;
-
     FD_ZERO(&master);    /* clear the master and temp sets */
     FD_ZERO(&read_fds);
 
@@ -323,9 +325,6 @@ void selectLoop(int listener)
     }
 
     /* main loop */
-    char printBuffer[1024];
-    char *method;
-    char *uri;
     int idx,j,len;
 
     FOREVER {
@@ -374,7 +373,8 @@ void selectLoop(int listener)
                         } else {
                             perror("recv");
                         }
-                	    freeFdData(&fdData[i]);
+                	    if (fdData[i].state!=STATE_PRE_REQUEST)
+                	    	freeFdData(&fdData[i]);
                 	    fdData[i].state=STATE_PRE_REQUEST;
                         close(i);
                         FD_CLR(i, &master); /* remove from master set */
@@ -525,8 +525,10 @@ void selectLoop(int listener)
                     		snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
                     		char * clientaddr = "TODO";
                     	    log_access(STATUS_HTTP_OK, clientaddr, &req);
-                    	    freeFdData(&fdData[i]);
+                    	    if (fdData[i].state!=STATE_PRE_REQUEST)
+                    	    	freeFdData(&fdData[i]);
                     	    fdData[i].state=STATE_PRE_REQUEST;
+                    	    printf("A job well done on %d\n",i);
                             close(i); // bye!
                             FD_CLR(i, &master); // remove from master set
                     	}

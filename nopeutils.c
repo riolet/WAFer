@@ -49,6 +49,10 @@ char * getQueryParam(const char * queryString, const char *name) {
 
 
 	char *value = malloc(MAX_BUFFER_SIZE*sizeof(char));
+		if (value == NULL) {
+			printf("Could not allocate memory.");
+			EXIT_FAILURE;
+		}
 	int i;
 
 	buffer=bufferQuestion;
@@ -102,6 +106,7 @@ char * getQueryPath(const char * reqString)
 	return queryPath;
 }
 
+
 /* Just like fprintf, but writing to the socket instead of a
  * file.
  * Parameters: the client, format
@@ -123,6 +128,10 @@ long nprintf (int client, const char *format, ...) {
 			/* buffer size was not enough */
 			free(buf);
 			buf = malloc(len+1);
+			if (buf == NULL) {
+				printf("Could not allocate memory.");
+				EXIT_FAILURE;
+			}
 			va_start (arg, format);
 			vsnprintf (buf, len+1, format, arg);
 			va_end (arg);
@@ -139,6 +148,7 @@ long nprintf (int client, const char *format, ...) {
 		return done;
 }
 
+
 /* Free thy mallocs */
 void freeHeaders(char **headers) {
 	int i=0;
@@ -150,10 +160,24 @@ void freeHeaders(char **headers) {
 }
 
 char * getHeader(char **headers, char *header) {
-	int i;
-	for (i=0;headers[i]!=NULL;i++) {
-		/* Work in Progress */
-	}
+    char * current_header, * matching_header;
+    // Not sure if MAX_BUFFER_SIZE is right.
+    char * value = malloc(MAX_BUFFER_SIZE*sizeof(char));
+    int i;
+    for (i=0;headers[i]!=NULL;i++) {
+        current_header = headers[i];
+        if ((matching_header = strstr(current_header, header))) {
+            value = matching_header+strlen(header);
+            if (*value == ':') {
+                while (*value == ' ' || *value == ':') {
+                    value = value+1;
+                }
+                return value;
+            }
+        }
+    }
+    memcpy(value, UNDEFINED, sizeof(UNDEFINED));
+    return value;
 }
 
 void writeStandardHeaders(int client)
@@ -242,6 +266,7 @@ ssize_t writeLongString(int client,const char* longString, size_t len)
 	/* printf("Sent  %d\n",sent); */
 	return sent;
 }
+
 
 
 /**********************************************************************/
