@@ -189,10 +189,23 @@ void freeHeaders(char **headers) {
 }
 
 char * getHeader(char **headers, char *header) {
-	int i;
-	for (i=0;headers[i]!=NULL;i++) {
-		/* Work in Progress */
-	}
+    char * current_header, * matching_header;
+    // Not sure if MAX_BUFFER_SIZE is right.
+    char * value = malloc(MAX_BUFFER_SIZE*sizeof(char));
+    for (int i=0;headers[i]!=NULL;i++) {
+        current_header = headers[i];
+        if ((matching_header = strstr(current_header, header))) {
+            value = matching_header+strlen(header);
+            if (*value == ':') {
+                while (*value == ' ' || *value == ':') {
+                    value = value+1;
+                }
+                return value;
+            }
+        }
+    }
+    memcpy(value, UNDEFINED, sizeof(UNDEFINED));
+    return value;
 }
 
 void writeStandardHeaders(int client)
