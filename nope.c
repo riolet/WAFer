@@ -88,38 +88,38 @@ typedef struct {
 	short withinHeaderIdx;
 } FdData;
 
-void newFdData(FdData *fdData) {
-	fdData->state = STATE_PRE_REQUEST;
-	fdData->readBuffer = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
-	fdData->method = malloc((MAX_METHOD_SIZE+1)*sizeof(char));
-	fdData->uri = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
-	fdData->headers = malloc(MAX_HEADERS*sizeof(char*));
-	fdData->ver = malloc(MAX_HEADERS*sizeof(char*));
-	fdData->readBufferIdx = 0;
-	fdData->readBufferLen = 0;
-	fdData->readBufferIdx = 0;
-	fdData->methodIdx = 0;
-	fdData->uriIdx = 0;
-	fdData->verIdx = 0;
-	fdData->headersIdx = 0;
-	fdData->headers[fdData->headersIdx]=NULL;
-	fdData->withinHeaderIdx = 0;
+void new_fd_data(FdData *fd) {
+	fd->state = STATE_PRE_REQUEST;
+	fd->readBuffer = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fd->method = malloc((MAX_METHOD_SIZE+1)*sizeof(char));
+	fd->uri = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fd->headers = malloc(MAX_HEADERS*sizeof(char*));
+	fd->ver = malloc(MAX_HEADERS*sizeof(char*));
+	fd->readBufferIdx = 0;
+	fd->readBufferLen = 0;
+	fd->readBufferIdx = 0;
+	fd->methodIdx = 0;
+	fd->uriIdx = 0;
+	fd->verIdx = 0;
+	fd->headersIdx = 0;
+	fd->headers[fd->headersIdx]=NULL;
+	fd->withinHeaderIdx = 0;
 }
 
-void freeFdData(FdData *fdData) {
-	free(fdData->readBuffer);
-	free(fdData->method);
-	free(fdData->uri);
-	freeHeaders(fdData->headers);
-	free(fdData->ver);
-	fdData->readBufferIdx = 0;
-	fdData->readBufferLen = 0;
-	fdData->readBufferIdx = 0;
-	fdData->methodIdx = 0;
-	fdData->uriIdx = 0;
-	fdData->verIdx = 0;
-	fdData->headersIdx = 0;
-	fdData->withinHeaderIdx = 0;
+void free_fd_data(FdData *fd) {
+	free(fd->readBuffer);
+	free(fd->method);
+	free(fd->uri);
+	freeHeaders(fd->headers);
+	free(fd->ver);
+	fd->readBufferIdx = 0;
+	fd->readBufferLen = 0;
+	fd->readBufferIdx = 0;
+	fd->methodIdx = 0;
+	fd->uriIdx = 0;
+	fd->verIdx = 0;
+	fd->headersIdx = 0;
+	fd->withinHeaderIdx = 0;
 }
 
 typedef struct {
@@ -374,7 +374,7 @@ void select_loop(int listener)
 							perror("recv");
 						}
 						if (fdData[i].state!=STATE_PRE_REQUEST)
-							freeFdData(&fdData[i]);
+							free_fd_data(&fdData[i]);
 						fdData[i].state = STATE_PRE_REQUEST;
 						close(i);
 						FD_CLR(i, &master); /* remove from master set */
@@ -382,7 +382,7 @@ void select_loop(int listener)
 						/* we got some data from a client */
 						bool read = false;
 						if (fdData[i].state == STATE_PRE_REQUEST) {
-							newFdData(&fdData[i]);
+							new_fd_data(&fdData[i]);
 							memcpy(fdData[i].readBuffer,buf,nbytes);
 							fdData[i].readBufferLen += nbytes;
 							read = true;
@@ -525,7 +525,7 @@ void select_loop(int listener)
 							snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
 							log_access(STATUS_HTTP_OK, NULL, &req);
 							if (fdData[i].state!=STATE_PRE_REQUEST)
-								freeFdData(&fdData[i]);
+								free_fd_data(&fdData[i]);
 							fdData[i].state = STATE_PRE_REQUEST;
 							printf("A job well done on %d\n",i);
 							close(i); // bye!
