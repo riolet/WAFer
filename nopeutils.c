@@ -61,7 +61,7 @@ char * getQueryParam(const char * queryString, const char *name) {
 	if (pos1) {
 		pos1 += strlen(buffer);
 		i=0;
-		while (*pos1 && *pos1 != '&') {
+		while (*pos1 && *pos1 != '&' && i<MAX_BUFFER_SIZE) {
 			if (*pos1 == '%') {
 				value[i]= (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
 				pos1 += 3;
