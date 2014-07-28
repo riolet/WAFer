@@ -1,6 +1,16 @@
 #ifndef NOPEUTILS_H_
 #define NOPEUTILS_H_
 
+#include <stdarg.h>
+#include <stdlib.h>
+
+
+#define NOPE_MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define NOPE_MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+/* To boolean or not to boolean */
+typedef int bool;
+
 /* ENTL */
 #define STR(X) #X
 #define WSPC " "
@@ -45,8 +55,10 @@
 
 #define STATIC_SEND(_socket, _str, _flags) send(_socket, _str, sizeof(_str)-1, _flags)
 
-#include <stdarg.h>
-#include <stdlib.h>
+bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen);
+#define STREQLIT(var,lit) stringEqualsLitLen(var,lit,sizeof lit)
+
+
 char ** readHeaders(int);
 void freeHeaders(char **);
 int getLine(int, char *, int);
@@ -91,7 +103,7 @@ char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char
 #define STATE_COMPLETE_READING 5
 
 #define STATUS_HTTP_OK 200
-typedef int bool;
+
 
 typedef struct struct_request Request;
 

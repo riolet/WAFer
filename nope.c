@@ -206,52 +206,6 @@ void log_access(int status, struct sockaddr_in *c_addr, http_request *req){
            ntohs(c_addr->sin_port), status, req->filename);
 }
 
-int process(int fd, char **readBuffer, fd_set *pMaster, struct sockaddr_in *clientaddr){
-    printf("accept request, fd is %d, pid is %d\n", fd, getpid());
-
-    int status = 200;
-
-	char buf[MAX_BUFFER_SIZE];
-	unsigned int numchars;
-	char method[MAX_BUFFER_SIZE];
-	char url[MAX_BUFFER_SIZE];
-	size_t i, j;
-    int client=fd;
-
-	numchars = getLine(client, buf, sizeof(buf)-1);
-
-	/* Null requests. Safe to ignore */
-	if (numchars==0)
-		return numchars;
-
-	i = 0; j = 0;
-	while (!ISspace(buf[j]) && (i < sizeof(method) - 1) && i<numchars)
-	{
-		method[i] = buf[j];
-		i++; j++;
-
-	}
-	method[i] = '\0';
-
-	if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
-	{
-		unimplemented(client);
-		return 1;
-	}
-
-
-	i = 0;
-	while (ISspace(buf[j]) && (j < sizeof(buf)))
-		j++;
-	while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < sizeof(buf)))
-	{
-		url[i] = buf[j];
-		i++; j++;
-	}
-	url[i] = '\0';
-
-}
-
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -262,7 +216,7 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 newFdData(FdData *fdData) {
-	fdData->state=STATE_METHOD;
+	fdData->state=STATE_PRE_REQUEST;
 	fdData->readBuffer=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
 	fdData->method=malloc((MAX_METHOD_SIZE+1)*sizeof(char));
 	fdData->uri=malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
@@ -344,6 +298,7 @@ void selectLoop(int listener)
     char *method;
     char *uri;
     int idx,j,len;
+
     for(;;) {
         read_fds = master; // copy it
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
@@ -390,27 +345,33 @@ void selectLoop(int listener)
                         } else {
                             perror("recv");
                         }
+                	    freeFdData(&fdData[i]);
+                	    fdData[i].state=STATE_PRE_REQUEST;
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set
                     } else {
                     	// we got some data from a client
-
-                    	snprintf(printBuffer,1024,"%s",buf);
-                    	printf("Received %d as %s\n",nbytes,printBuffer);
+                    	/*
+                    	snprintf(printBuffer,NOPE_MIN(sizeof(printBuffer),nbytes),"%s",buf);
+                    	printf("Received %d as ASCII %d STRING %s \n",nbytes,printBuffer[0],printBuffer);
+                    	*/
                     	bool read=false;
                     	if (fdData[i].state==STATE_PRE_REQUEST) {
                     		newFdData(&fdData[i]);
                     		memcpy(fdData[i].readBuffer,buf,nbytes);
                     		fdData[i].readBufferLen += nbytes;
                     		read=true;
+                    		fdData[i].state=STATE_METHOD;
                     	}
 
                     	if (fdData[i].state==STATE_METHOD) {
+                    		/*
                     		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
                     		printf("STATE=METHOD -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+                    		*/
                     		if (!read) {
                     			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
                     				fdData[i].readBufferLen += nbytes;
                     				read=true;
                     			}
@@ -425,10 +386,12 @@ void selectLoop(int listener)
                     			if (fdData[i].readBuffer[j]=='\n') {
                          			fdData[i].method[idx]=0;
                             		fdData[i].state=STATE_HEADER;
+                            		j++;
                             		break;
                     			} else if (ISspace(fdData[i].readBuffer[j])) {
                         			fdData[i].method[idx]=0;
                         			fdData[i].state=STATE_URI;
+                        			j++;
                         			break;
                         		} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
@@ -440,7 +403,7 @@ void selectLoop(int listener)
                     		}
 
                     		fdData[i].methodIdx=idx;
-                    		fdData[i].readBufferIdx=j+1;
+                    		fdData[i].readBufferIdx=j;
 
                     		if (idx==MAX_METHOD_SIZE) {	/*We don't like really long methods. Cut em off */
                     			fdData[i].method[idx]=0;
@@ -450,13 +413,10 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_URI) {
-                    		printf("Method of %d is %s\n",i,fdData[i].method);
-
-                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
-                    		//printf("STATE=URI -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+                    		/* printf("Method of %d is %s\n",i,fdData[i].method); */
                     		if (!read) {
                     			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
                     				fdData[i].readBufferLen += nbytes;
                     				read=true;
                     			}
@@ -471,10 +431,12 @@ void selectLoop(int listener)
                     			if (fdData[i].readBuffer[j]=='\n') {
                          			fdData[i].uri[idx]=0;
                             		fdData[i].state=STATE_HEADER;
+                            		j++;
                             		break;
                     			} else if (ISspace(fdData[i].readBuffer[j])) {
                         			fdData[i].uri[idx]=0;
                         			fdData[i].state=STATE_VERSION;
+                        			j++;
                         			break;
                         		} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
@@ -486,7 +448,7 @@ void selectLoop(int listener)
                     		}
 
                     		fdData[i].uriIdx=idx;
-                    		fdData[i].readBufferIdx=j+1;
+                    		fdData[i].readBufferIdx=j;
 
                     		if (idx==MAX_REQUEST_SIZE) {	/*We don't like really long URIs either. Cut em off */
                     			fdData[i].uri[idx]=0;
@@ -496,14 +458,15 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_VERSION) {
+                    		/*
                     		printf("URI of %d is %s\n",i,fdData[i].uri);
-
                     		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
+                    		*/
                     		//printf("STATE=VERSION -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
 
                     		if (!read) {
                     			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
                     				fdData[i].readBufferLen += nbytes;
                     				read=true;
                     			} else {
@@ -520,6 +483,7 @@ void selectLoop(int listener)
                     			if (fdData[i].readBuffer[j]=='\n') {
                          			fdData[i].ver[idx]=0;
                             		fdData[i].state=STATE_HEADER;
+                            		j++;
                             		break;
                     			} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
@@ -530,7 +494,7 @@ void selectLoop(int listener)
                     			j++;
                     		}
                     		fdData[i].verIdx=idx;
-                    		fdData[i].readBufferIdx=j+1;
+                    		fdData[i].readBufferIdx=j;
 
                     		/*We don't like really long version either. Cut em off */
                     		if (idx==MAX_VER_SIZE) {	/*We don't like really long URIs either. Cut em off */
@@ -541,12 +505,14 @@ void selectLoop(int listener)
                     	}
 
                     	if (fdData[i].state==STATE_HEADER) {
+                    		/*
                     		printf("VER of %d is %s\n",i,fdData[i].ver);
-
-                    		printf("Start reading headers\n");
+                    		snprintf(printBuffer,fdData[i].readBufferLen,"%s",fdData[i].readBuffer);
+                    		printf("STATE=HEADER -> %d %d %s\n",fdData[i].readBufferLen,fdData[i].readBufferIdx, printBuffer);
+                    		*/
                     		if (!read) {
                     			if (nbytes+fdData[i].readBufferIdx<MAX_REQUEST_SIZE) {
-                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferIdx,buf,nbytes);
+                    				memcpy(fdData[i].readBuffer+fdData[i].readBufferLen,buf,nbytes);
                     				fdData[i].readBufferLen += nbytes;
                     				read=true;
                     			} else {
@@ -559,28 +525,38 @@ void selectLoop(int listener)
                     		idx=fdData[i].withinHeaderIdx;
 
                     		while (j<len) {
+                    			 /* printf("idx %d j %d (%d) fdData[i].headersIdx %d char %c [%d]\n",
+                    				idx,j,len,fdData[i].headersIdx,fdData[i].readBuffer[j],fdData[i].readBuffer[j]); */
                     			if (fdData[i].readBuffer[j]=='\n') {
-                    				if (fdData[i].withinHeaderIdx==0) {
+                    				if (idx==0) {
                     					fdData[i].state=STATE_COMPLETE_READING;
-                    					break; /* The last header */
+                    					j++;
+                    					break; /* The last of headers */
                     				}
-                    				fdData[i].headersIdx++;
+                    				fdData[i].headers[fdData[i].headersIdx][idx]=0;
+                    				if (fdData[i].headersIdx<MAX_HEADERS)
+                    					fdData[i].headersIdx++;
+                    				else {
+                    					/* OK, buddy, you have sent us MAX_HEADERS headers. I am done with headers */
+                    					fdData[i].state=STATE_COMPLETE_READING;
+                    					j++;
+                    					break;
+                    				}
                     				fdData[i].headers[fdData[i].headersIdx]=NULL;
-                         			idx=fdData[i].withinHeaderIdx=0;
-                            		break;
+                         			idx=0;
                     			} else if (fdData[i].readBuffer[j]=='\r') {
                         			/*Skip over \r */
                     			} else {
                     				if (idx==0)
                     					fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
-                    				fdData[i].ver[idx] = fdData[i].readBuffer[j];
+                    				fdData[i].headers[fdData[i].headersIdx][idx] = fdData[i].readBuffer[j];
                     				idx++;
                     			}
                     			j++;
                     		}
 
                     		fdData[i].withinHeaderIdx=idx;
-                    		fdData[i].readBufferIdx=j+1;
+                    		fdData[i].readBufferIdx=j;
                     	}
 
                     	if (fdData[i].state==STATE_COMPLETE_READING) {
@@ -597,7 +573,7 @@ void selectLoop(int listener)
                     		char * clientaddr = "TODO";
                     	    log_access(STATUS_HTTP_OK, clientaddr, &req);
                     	    freeFdData(&fdData[i]);
-                    	    newFdData(&fdData[i]);
+                    	    fdData[i].state=STATE_PRE_REQUEST;
                             close(i); // bye!
                             FD_CLR(i, &master); // remove from master set
                     	}

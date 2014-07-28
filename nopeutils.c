@@ -20,11 +20,16 @@
 #include "nopeutils.h"
 
 /* String functions */
-typedef struct nopeString {
-	char * string;
-	short length;
-};
-
+bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen) {
+	int i;
+	for (i=0;i<litStrLen-1;i++) {
+		if (varStr[i]==0)
+			return false;
+		if (varStr[i]!=litStr[i])
+			return false;
+	}
+	return true;
+}
 
 /**********************************************************************/
 /* Return the value of a query parameter.
@@ -167,31 +172,11 @@ char ** readHeaders(int client) {
 	char buf[MAX_BUFFER_SIZE];
 	char **headers;
 
-	/*TODO:we hate headers */
+	/*TODO: We are leaving this for backward compatibility */
 	headers=malloc(sizeof(char*)*1);
 	headers[0]=0;
 	return headers;
 	/* End rant */
-
-	int numchars;
-	int i=0;
-
-	/* printf("Mallocing %ld \n",sizeof(char*)*MAX_HEADERS); */
-	headers=malloc(sizeof(char*)*MAX_HEADERS);
-
-
-	numchars = getLine(client, buf, sizeof(buf));
-	/*Todo: Close the FD if numchars<=0 */
-	while ((numchars > 0) && strcmp("\n", buf)) {
-		/* printf("Numchars %d %s\n",numchars,buf); */
-		headers[i]=malloc((numchars+1)*sizeof(char));
-		memcpy(headers[i],buf,numchars);
-		headers[i][numchars]=0;
-		i++;
-		numchars = getLine(client, buf, sizeof(buf));
-	}
-	headers[i]=NULL;
-	return headers;
 }
 
 /* Free thy mallocs */
