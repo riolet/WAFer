@@ -189,7 +189,7 @@ int open_listenfd(int port){
 
     // 6 is TCP's protocol number
     // enable this, much faster : 4000 req/s -> 17000 req/s
-#ifndef __APPLE__
+#ifdef __linux__
     if (setsockopt(listenfd, 6, TCP_CORK,
                    (const void *)&optval , sizeof(int)) < 0)
         return -1;
