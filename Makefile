@@ -20,8 +20,8 @@ $(LIBNOPE): $(LIBNOPE_OBJ)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm $(LIBNOPE_OBJ)
+	rm -f $(LIBNOPE_OBJ)
 
 distclean:
-	rm $(LIBNOPE) $(LIBNOPE_OBJ) $(MODULES)
+	rm -f $(LIBNOPE) $(LIBNOPE_OBJ) $(MODULES)
 
