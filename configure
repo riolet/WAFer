@@ -32,17 +32,11 @@ done
 OS=`uname`
 
 echo export INST_ROOT=$prefix > config.mk
-
-echo '#define Instroot "'$prefix'"' > config.h
 case $OS in
     *Linux*)
-        echo '#define Asmcmd "as -g -o %s %s"' >> config.h
-        echo '#define Fprefix ""' >> config.h
         echo 'export SYS=linux' >> config.mk
         ;;
     *Darwin*)
-        echo '#define Asmcmd "as -g -o %s %s"' >> config.h
-        echo '#define Fprefix "_"' >> config.h
         echo 'export SYS=osx' >> config.mk
         ;;
     *)
