@@ -458,7 +458,6 @@ void select_loop(int listenfd)
 			}
 
 			if (fdData[i].state == STATE_HEADER) {
-				get_data(&fdData[i]);
 				idx = fdData[i].withinHeaderIdx;
 				j = fdData[i].readBufferIdx;
 				len = fdData[i].readBufferLen;
