@@ -27,6 +27,8 @@
 #define DEFAULT_PORT 4242
 #define DEFAULT_N_CHILDREN 15
 
+#define SIZE_OF_CHAR sizeof(char)
+
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
 	if (isspace(fdDataList[i].readBuffer[j])) {\
 		_str_[idx]=0;\
@@ -70,11 +72,11 @@ typedef struct {
 
 void new_fd_data(FdData *fd) {
 	fd->state = STATE_PRE_REQUEST;
-	fd->readBuffer = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
-	fd->method = malloc((MAX_METHOD_SIZE+1)*sizeof(char));
-	fd->uri = malloc((MAX_REQUEST_SIZE+1)*sizeof(char));
+	fd->readBuffer = malloc((MAX_REQUEST_SIZE+1)*SIZE_OF_CHAR);
+	fd->method = malloc((MAX_METHOD_SIZE+1)*SIZE_OF_CHAR);
+	fd->uri = malloc((MAX_REQUEST_SIZE+1)*SIZE_OF_CHAR);
+	fd->ver = malloc(MAX_HEADERS*SIZE_OF_CHAR);
 	fd->headers = malloc(MAX_HEADERS*sizeof(char*));
-	fd->ver = malloc(MAX_HEADERS*sizeof(char*));
 	fd->readBufferIdx = 0;
 	fd->readBufferLen = 0;
 	fd->readBufferIdx = 0;
@@ -113,13 +115,6 @@ void freeHeaders(char **headers)
 	free(headers);
 }
 
-typedef struct {
-	int rio_fd;                 /* descriptor for this buf */
-	size_t rio_cnt;                /* unread byte in this buf */
-	char *rio_bufptr;           /* next unread byte in this buf */
-	char rio_buf[RIO_BUFSIZE];  /* internal buffer */
-} rio_t;
-
 /* Simplifies calls to bind(), connect(), and accept() */
 typedef struct sockaddr SA;
 
@@ -128,94 +123,6 @@ typedef struct {
 	off_t offset;              /* for support Range */
 	size_t end;
 } http_request;
-
-char *default_mime_type = "text/plain";
-
-void rio_readinitb(rio_t *rp, int fd){
-	rp->rio_fd = fd;
-	rp->rio_cnt = 0;
-	rp->rio_bufptr = rp->rio_buf;
-}
-
-ssize_t writen(int fd, void *usrbuf, size_t n){
-	size_t nleft = n;
-	ssize_t nwritten;
-	char *bufp = usrbuf;
-
-	while (nleft > 0){
-		if ((nwritten = write(fd, bufp, nleft)) <= 0){
-			if (errno == EINTR)  /* interrupted by sig handler return */
-				nwritten = 0;    /* and call write() again */
-			else
-				return -1;       /* errorno set by write() */
-		}
-		nleft -= nwritten;
-		bufp += nwritten;
-	}
-	return n;
-}
-
-
-/*
- * rio_read - This is a wrapper for the Unix read() function that
- *    transfers min(n, rio_cnt) bytes from an internal buffer to a user
- *    buffer, where n is the number of bytes requested by the user and
- *    rio_cnt is the number of unread bytes in the internal buffer. On
- *    entry, rio_read() refills the internal buffer via a call to
- *    read() if the internal buffer is empty.
- */
-/* $begin rio_read */
-static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n) {
-	ssize_t cnt, tmp;
-	if (rp->rio_cnt == 0) {  /* refill if buf is empty */
-
-		tmp = read(rp->rio_fd, rp->rio_buf,
-			   sizeof(rp->rio_buf));
-		if (tmp < 0){
-			if (errno != EINTR) /* interrupted by sig handler return */
-				return -1;
-		}
-		else if (tmp == 0)  /* EOF */
-			return 0;
-
-		rp->rio_bufptr = rp->rio_buf; /* reset buffer ptr */
-		rp->rio_cnt = tmp;
-	}
-
-	/* Copy min(n, rp->rio_cnt) bytes from internal buf to user buf */
-	cnt = n;
-	if (rp->rio_cnt < n)
-		cnt = rp->rio_cnt;
-	memcpy(usrbuf, rp->rio_bufptr, cnt);
-	rp->rio_bufptr += cnt;
-	rp->rio_cnt -= cnt;
-	return cnt;
-}
-
-/*
- * rio_readlineb - robustly read a text line (buffered)
- */
-ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen){
-	size_t n;
-	ssize_t rc;
-	char c, *bufp = usrbuf;
-
-	for (n = 1; n < maxlen; n++){
-		if ((rc = rio_read(rp, &c, 1)) == 1){
-			*bufp++ = c;
-			if (c == '\n')
-				break;
-		} else if (rc == 0){
-			if (n == 1)
-				return 0; /* EOF, no data read */
-			else
-				break;    /* EOF, some data was read */
-		} else
-			return -1;    /* error */
-	}
-	*bufp = 0;
-	return n;
-}
 
 int open_listenfd(int port){
 	int listenfd, optval = 1;
@@ -230,11 +137,9 @@ int open_listenfd(int port){
 		       (const void *)&optval , sizeof(int)) < 0)
 		return -1;
 
-	// 6 is TCP's protocol number
-	// enable this, much faster : 4000 req/s -> 17000 req/s
-
+	/* TCP_CORK: If set, don't send out partial frames. */
 	#ifdef TCP_CORK
-	if (setsockopt(listenfd, 6, TCP_CORK,
+	if (setsockopt(listenfd, IPPROTO_TCP, TCP_CORK,
 		       (const void *)&optval , sizeof(int)) < 0)
 		return -1;
 	#endif

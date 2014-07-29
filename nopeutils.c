@@ -347,14 +347,6 @@ bool nope_route(Request request, const char * path, void (* function)(Request),b
 	}
 }
 
-#define ROUTE_INLINE(request,path)	nope_route(request, const char * path, NULL,false)
-
-#define ROUTE_FUNCTION(request,path,function)	nope_route(request, const char * path, function,false)
-
-#define ROUTE_INLINE_HEADERS(request,path,NULL,true)	nope_route(request, const char * path, NULL,true)
-
-#define ROUTE_FUNCTION_HEADERS(request,path,function,true)	nope_route(request, const char * path, function,true)
-
 /* Deprecated functions */
 bool route(Request request, const char * path)
 {
