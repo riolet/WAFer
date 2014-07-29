@@ -455,13 +455,6 @@ void select_loop(int listenfd)
 
 
 				while (j<len) {
-					printf("Fd %d | readBufferLen %d | State %d | withinHeaderIdx %d|readBufferIdx %d|is:%c <-> n:%d\n",
-							i,fdDataList[i].readBufferLen,fdDataList[i].state,
-							fdDataList[i].withinHeaderIdx,fdDataList[i].readBufferIdx,
-							fdDataList[i].readBuffer[j],'\n');
-
-					fwrite(fdDataList[i].readBuffer,1,fdDataList[i].readBufferLen,stdout);
-					printf("\n");
 					if (fdDataList[i].readBuffer[j]=='\n') {
 						if (idx == 0) {
 							fdDataList[i].state = STATE_COMPLETE_READING;
