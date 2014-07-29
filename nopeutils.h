@@ -3,13 +3,10 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
-
+#include "nope.h"
 
 #define NOPE_MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define NOPE_MIN(x, y) (((x) < (y)) ? (x) : (y))
-
-/* To boolean or not to boolean */
-typedef int bool;
 
 /* ENTL */
 #define STR(X) #X
@@ -68,9 +65,8 @@ bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen);
 	#include <sys/uio.h>
 #endif
 char ** readHeaders(int);
-void freeHeaders(char **);
 int getLine(int, char *, int);
-void notFound(int);
+void not_found(int);
 void docwrite(int,const char*);
 long nprintf (int, const char *, ...);
 char ** sendAndReceiveHeaders(int);
@@ -81,6 +77,9 @@ ssize_t writeLongString(int,const char*, size_t);
 void serveFile(int, const char *, const char *);
 char * dupstr (const char *);
 
+void unimplemented(int client);
+void not_found(int client);
+
 char * _hscan(int client, const char * reqStr, const char *msg,const char *inputstr);
 char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr);
 
@@ -90,42 +89,24 @@ char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char
 #define HSCANITIE(client,reqStr,msg) _hscanIfEmpty(client,reqStr,msg,STAGPARAMQ(input,type="text"))
 #define HSCAN(client,reqStr,msg,tag,attributes,text) _hscan(client,reqStr,msg,QTAGAPARAMQ(tag,attributes,text))
 
-#define SERVER_STRING "Server: nope.chttpd/0.1.0\r\n"
-#define ToHex(Y) (Y>='0'&&Y<='9'?Y-'0':Y-'A'+10)
-#define UNDEFINED "VALUE_UNDEFINED"
-#define MAX_HEADERS 1024
-#define MAX_BUFFER_SIZE 1024
-#define MAX_DPRINTF_SIZE 64
-#define MAX_FD_SIZE 1024
-#define MAX_METHOD_SIZE 64
-#define MAX_VER_SIZE 64
-#define MAX_REQUEST_SIZE 8192
-#define true 1
-#define false 0
 
-#define STATE_PRE_REQUEST 0
-#define STATE_METHOD 1
-#define STATE_URI 2
-#define STATE_VERSION 3
-#define STATE_HEADER 4
-#define STATE_COMPLETE_READING 5
-
-#define STATUS_HTTP_OK 200
-
-
-typedef struct struct_request Request;
-
-struct struct_request {
-	int client;
-	char * reqStr;
-	char * method;
-	char **headers;
-};
-
+/* Deprecated */
 bool route(Request request, const char * path);
 bool routef(Request request, const char * path, void (* function)(int, const char *, const char*));
 bool routeh(Request request, const char * path);
 bool routefh(Request request, const char * path, void (* function)(int, const char *, const char*));
+/* End deprecated */
 
+bool nope_route(Request request, const char * path, void (* function)(Request),bool send_headers);
 
+#define ROUTE_INLINE(request,path)	nope_route(request, path, NULL,false)
+#define ROUTE_FUNCTION(request,path,function)	nope_route(request, path, function,false)
+#define ROUTE_INLINE_HEADERS(request,path)	nope_route(request, path, NULL,true)
+#define ROUTE_FUNCTION_HEADERS(request,path,function)	nope_route(request, path, function,true)
+
+#define MIME_TEXT_HTML "text/html"
+#define ENCODING_GZIP "gzip"
+
+#define SEND_TEXT_HTML_HEADER(request) sendHeadersTypeEncoding(request,MIME_TEXT_HTML, NULL)
+#define SEND_TEXT_HTML_GZIP_HEADER(request) sendHeadersTypeEncoding(request,MIME_TEXT_HTML, ENCODING_GZIP)
 #endif /* NOPEUTILS_H_ */

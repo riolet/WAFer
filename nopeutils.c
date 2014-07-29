@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include "nopeutils.h"
+#include "nope.h"
 
 /* String functions */
 bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen)
@@ -151,9 +152,9 @@ long nprintf (int client, const char *format, ...)
 
 char * getHeader(char **headers, char *header)
 {
-	char * current_header, * matching_header;
+	char * current_header, * matching_header, *value;
 	// Not sure if MAX_BUFFER_SIZE is right.
-	char * value = malloc(MAX_BUFFER_SIZE*sizeof(char));
+	char * retval = malloc(MAX_BUFFER_SIZE*sizeof(char));
 	int i;
 	for (i=0;headers[i]!=NULL;i++) {
 		current_header = headers[i];
@@ -161,14 +162,29 @@ char * getHeader(char **headers, char *header)
 			value = matching_header+strlen(header);
 			if (*value == ':') {
 				while (*value == ' ' || *value == ':') {
-					value = value+1;
+					value++;
 				}
-				return value;
+				strcpy(retval,value);
+				return retval;
 			}
 		}
 	}
-	memcpy(value, UNDEFINED, sizeof(UNDEFINED));
-	return value;
+	memcpy(retval, UNDEFINED, sizeof(UNDEFINED));
+	return retval;
+}
+
+
+void sendHeadersTypeEncoding(Request request,const char *type, const char * encoding)
+{
+	int client=request.client;
+	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+	STATIC_SEND(client, SERVER_STRING, 0);
+	FDPRINTF(client, "Content-Type: %s\r\n", type,0);
+	if (encoding!=NULL) {
+		FDPRINTF(client, "Content-Encoding: %s\r\n", encoding,0);
+	}
+
+	STATIC_SEND(client, "\r\n", 0);
 }
 
 void writeStandardHeaders(int client)
@@ -206,7 +222,7 @@ void serveDownloadableFile(int client, const char *filename, const char *display
 
 	resource = fopen(filename, "r");
 	if (resource == NULL) {
-		notFound(client);
+		not_found(client);
 	} else {
 		cat(client, resource);
 	}
@@ -227,7 +243,7 @@ void serveFile(int client, const char *filename, const char * type)
 
 	resource = fopen(filename, "r");
 	if (resource == NULL) {
-		notFound(client);
+		not_found(client);
 	} else {
 		cat(client, resource);
 	}
@@ -273,7 +289,7 @@ void unimplemented(int client)
 /**********************************************************************/
 /* Give a client a 404 not found status message. */
 /**********************************************************************/
-void notFound(int client)
+void not_found(int client)
 {
 	FDPRINT(client, "HTTP/1.0 404 NOT FOUND\r\n");
 	FDPRINT(client, "Content-Type: text/html\r\n");
@@ -315,6 +331,31 @@ char * _hscan(int client, const char * reqStr, const char *msg,const char * inpu
 	return qparam;
 }
 
+bool nope_route(Request request, const char * path, void (* function)(Request),bool send_headers)
+{
+	char * queryPath = getQueryPath(request.reqStr);
+	if (strcmp(queryPath,path)==0) {
+		free(queryPath);
+		if (send_headers)
+			writeStandardHeaders(request.client);
+		if (function!=NULL)
+			function(request);
+		return true;
+	} else {
+		free(queryPath);
+		return false;
+	}
+}
+
+#define ROUTE_INLINE(request,path)	nope_route(request, const char * path, NULL,false)
+
+#define ROUTE_FUNCTION(request,path,function)	nope_route(request, const char * path, function,false)
+
+#define ROUTE_INLINE_HEADERS(request,path,NULL,true)	nope_route(request, const char * path, NULL,true)
+
+#define ROUTE_FUNCTION_HEADERS(request,path,function,true)	nope_route(request, const char * path, function,true)
+
+/* Deprecated functions */
 bool route(Request request, const char * path)
 {
 	char * queryPath = getQueryPath(request.reqStr);
@@ -366,3 +407,4 @@ bool routefh(Request request, const char * path, void (* function)(int,const cha
 		return false;
 	}
 }
+/* End deprecated functions */

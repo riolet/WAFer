@@ -18,7 +18,7 @@
 #include <ctype.h>
 #include <netdb.h>
 
-#include "server.h"
+#include "nope.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
@@ -28,27 +28,27 @@
 #define DEFAULT_N_CHILDREN 15
 
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-	if (isspace(fdData[i].readBuffer[j])) {\
+	if (isspace(fdDataList[i].readBuffer[j])) {\
 		_str_[idx]=0;\
-		fdData[i].state = _state_;\
+		fdDataList[i].state = _state_;\
 		j++;\
 		break;\
 	}
 
 #define ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-	if (fdData[i].readBuffer[j]=='\n') {\
+	if (fdDataList[i].readBuffer[j]=='\n') {\
 		_str_[idx]=0;\
-		fdData[i].state = _state_;\
+		fdDataList[i].state = _state_;\
 		j++;\
 		break;\
 	}
 
 #define ON_SLASH_R_IGNORE\
-	if (fdData[i].readBuffer[j]=='\r') { /*Do nothing*/ }
+	if (fdDataList[i].readBuffer[j]=='\r') { /*Do nothing*/ }
 
 #define ON_EVERYTHING_ELSE_CONSUME(_str_)\
 	{\
-		_str_[idx] = fdData[i].readBuffer[j];\
+		_str_[idx] = fdDataList[i].readBuffer[j];\
 		idx++;\
 	}
 
@@ -343,9 +343,9 @@ void select_loop(int listenfd)
 	/* keep track of the biggest file descriptor */
 	fdmax = listenfd; /* so far, it's this one */
 
-	FdData fdData[MAX_FD_SIZE];
+	FdData fdDataList[MAX_FD_SIZE];
 	for (i = 0;i<fdmax;i++) {
-		fdData[i].state = STATE_PRE_REQUEST;
+		fdDataList[i].state = STATE_PRE_REQUEST;
 	}
 
 	/* main loop */
@@ -363,143 +363,151 @@ void select_loop(int listenfd)
 			if (!FD_ISSET(i, &read_fds)) // we got one!!
 				continue;
 			if (i == listenfd) {
-				accept_connection(fdData, i, listenfd, remote_ip, &fdmax, &master);
+				accept_connection(fdDataList, i, listenfd, remote_ip, &fdmax, &master);
 				break;
 			}
-			nbytes = recv(i, fdData[i].readBuffer, MAX_REQUEST_SIZE - fdData[i].readBufferIdx, 0);
+			nbytes = recv(i, fdDataList[i].readBuffer+fdDataList[i].readBufferIdx, MAX_REQUEST_SIZE - fdDataList[i].readBufferLen, 0);
 			/* read failure */
 			if (nbytes <= 0) {
-				shutdown_connection(fdData, i, nbytes, &master);
+				shutdown_connection(fdDataList, i, nbytes, &master);
 				break;
 			}
-			fdData[i].readBufferLen += nbytes;
+
+			fdDataList[i].readBufferLen += nbytes;
 
 			/* we got some data from a client */
-			if (fdData[i].state == STATE_PRE_REQUEST) {
-				fdData[i].state = STATE_METHOD;
+			if (fdDataList[i].state == STATE_PRE_REQUEST) {
+				fdDataList[i].state = STATE_METHOD;
 			}
 
-			if (fdData[i].state == STATE_METHOD) {
-				idx = fdData[i].methodIdx;
-				j = fdData[i].readBufferIdx;
-				len = fdData[i].readBufferLen;
+			if (fdDataList[i].state == STATE_METHOD) {
+				idx = fdDataList[i].methodIdx;
+				j = fdDataList[i].readBufferIdx;
+				len = fdDataList[i].readBufferLen;
 
 				while (j<len && idx<MAX_METHOD_SIZE)
 				{
-					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_HEADER)
-					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].method,STATE_URI)
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method,STATE_HEADER)
+					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method,STATE_URI)
 					else ON_SLASH_R_IGNORE
-					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].method)
+					else ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].method)
 					j++;
 				}
 
-				fdData[i].methodIdx = idx;
-				fdData[i].readBufferIdx = j;
+				fdDataList[i].methodIdx = idx;
+				fdDataList[i].readBufferIdx = j;
 
 				if (idx == MAX_METHOD_SIZE) {	/*We don't like really long methods. Cut em off */
-					fdData[i].method[idx]=0;
-					fdData[i].state = STATE_URI;
+					fdDataList[i].method[idx]=0;
+					fdDataList[i].state = STATE_URI;
 				}
 			}
 
-			if (fdData[i].state == STATE_URI) {
-				idx = fdData[i].uriIdx;
-				j = fdData[i].readBufferIdx;
-				len = fdData[i].readBufferLen;
+			if (fdDataList[i].state == STATE_URI) {
+				idx = fdDataList[i].uriIdx;
+				j = fdDataList[i].readBufferIdx;
+				len = fdDataList[i].readBufferLen;
 
 				while (j<len && idx<MAX_REQUEST_SIZE)
 				{
-					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_HEADER)
-					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdData[i].uri,STATE_VERSION)
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri,STATE_HEADER)
+					else ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri,STATE_VERSION)
 					else ON_SLASH_R_IGNORE
-					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].uri)
+					else ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].uri)
 					j++;
 				}
 
-				fdData[i].uriIdx = idx;
-				fdData[i].readBufferIdx = j;
+				fdDataList[i].uriIdx = idx;
+				fdDataList[i].readBufferIdx = j;
 
 				if (idx == MAX_REQUEST_SIZE) {	/*We don't like really long URIs either. Cut em off */
-					fdData[i].uri[idx]=0;
-					fdData[i].state = STATE_VERSION;
+					fdDataList[i].uri[idx]=0;
+					fdDataList[i].state = STATE_VERSION;
 				}
 			}
 
-			if (fdData[i].state == STATE_VERSION) {
-				idx = fdData[i].verIdx;
-				j = fdData[i].readBufferIdx;
-				len = fdData[i].readBufferLen;
+			if (fdDataList[i].state == STATE_VERSION) {
+				idx = fdDataList[i].verIdx;
+				j = fdDataList[i].readBufferIdx;
+				len = fdDataList[i].readBufferLen;
 
 				while (j<len && idx<MAX_VER_SIZE)
 				{
-					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdData[i].ver,STATE_HEADER)
+					ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].ver,STATE_HEADER)
 					else ON_SLASH_R_IGNORE
-					else ON_EVERYTHING_ELSE_CONSUME(fdData[i].ver)
+					else ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].ver)
 					j++;
 				}
-				fdData[i].verIdx = idx;
-				fdData[i].readBufferIdx = j;
+				fdDataList[i].verIdx = idx;
+				fdDataList[i].readBufferIdx = j;
 
 				/*We don't like really long version either. Cut em off */
 				if (idx == MAX_VER_SIZE) {	/*We don't like really long URIs either. Cut em off */
-					fdData[i].ver[idx]=0;
-					fdData[i].state = STATE_HEADER;
+					fdDataList[i].ver[idx]=0;
+					fdDataList[i].state = STATE_HEADER;
 				}
 			}
 
-			if (fdData[i].state == STATE_HEADER) {
-				idx = fdData[i].withinHeaderIdx;
-				j = fdData[i].readBufferIdx;
-				len = fdData[i].readBufferLen;
+			if (fdDataList[i].state == STATE_HEADER) {
+				idx = fdDataList[i].withinHeaderIdx;
+				j = fdDataList[i].readBufferIdx;
+				len = fdDataList[i].readBufferLen;
 
 
 				while (j<len) {
-					if (fdData[i].readBuffer[j]=='\n') {
+					printf("Fd %d | readBufferLen %d | State %d | withinHeaderIdx %d|readBufferIdx %d|is:%c <-> n:%d\n",
+							i,fdDataList[i].readBufferLen,fdDataList[i].state,
+							fdDataList[i].withinHeaderIdx,fdDataList[i].readBufferIdx,
+							fdDataList[i].readBuffer[j],'\n');
+
+					fwrite(fdDataList[i].readBuffer,1,fdDataList[i].readBufferLen,stdout);
+					printf("\n");
+					if (fdDataList[i].readBuffer[j]=='\n') {
 						if (idx == 0) {
-							fdData[i].state = STATE_COMPLETE_READING;
+							fdDataList[i].state = STATE_COMPLETE_READING;
 							j++;
 							break; /* The last of headers */
 						}
-						fdData[i].headers[fdData[i].headersIdx][idx]=0;
-						if (fdData[i].headersIdx<MAX_HEADERS)
-							fdData[i].headersIdx++;
+						fdDataList[i].headers[fdDataList[i].headersIdx][idx]=0;
+						if (fdDataList[i].headersIdx<MAX_HEADERS)
+							fdDataList[i].headersIdx++;
 						else {
 							/* OK, buddy, you have sent us MAX_HEADERS headers. That's all yer get */
-							fdData[i].state = STATE_COMPLETE_READING;
+							fdDataList[i].state = STATE_COMPLETE_READING;
 							j++;
 							break;
 						}
-						fdData[i].headers[fdData[i].headersIdx]=NULL;
+						fdDataList[i].headers[fdDataList[i].headersIdx]=NULL;
 						idx = 0;
-					} else if (fdData[i].readBuffer[j]=='\r') {
+					} else if (fdDataList[i].readBuffer[j]=='\r') {
 						/*Skip over \r */
 					} else {
 						if (idx == 0)
-							fdData[i].headers[fdData[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
-						fdData[i].headers[fdData[i].headersIdx][idx] = fdData[i].readBuffer[j];
+							fdDataList[i].headers[fdDataList[i].headersIdx]=malloc(MAX_BUFFER_SIZE*sizeof(char));
+						fdDataList[i].headers[fdDataList[i].headersIdx][idx] = fdDataList[i].readBuffer[j];
 						idx++;
 					}
 					j++;
 				}
 
-				fdData[i].withinHeaderIdx = idx;
-				fdData[i].readBufferIdx = j;
+				fdDataList[i].withinHeaderIdx = idx;
+				fdDataList[i].readBufferIdx = j;
 			}
 
-			if (fdData[i].state == STATE_COMPLETE_READING) {
+			if (fdDataList[i].state == STATE_COMPLETE_READING) {
 				request.client = i;
-				request.reqStr = fdData[i].uri;
-				request.method = fdData[i].method;
-				request.headers = fdData[i].headers;
+				request.reqStr = fdDataList[i].uri;
+				request.method = fdDataList[i].method;
+				request.headers = fdDataList[i].headers;
 				server(request);
 				close(i);
 
 				http_request req;
-				snprintf(req.filename,sizeof(req.filename)-1,"%s",fdData[i].uri);
+				snprintf(req.filename,sizeof(req.filename)-1,"%s",fdDataList[i].uri);
 				log_access(STATUS_HTTP_OK, NULL, &req);
-				if (fdData[i].state!=STATE_PRE_REQUEST)
-					free_fd_data(&fdData[i]);
-				fdData[i].state = STATE_PRE_REQUEST;
+				if (fdDataList[i].state!=STATE_PRE_REQUEST)
+					free_fd_data(&fdDataList[i]);
+				fdDataList[i].state = STATE_PRE_REQUEST;
 				printf("A job well done on %d\n",i);
 				close(i); // bye!
 				FD_CLR(i, &master); // remove from master set
