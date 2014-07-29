@@ -25,10 +25,7 @@
 #include <ctype.h>
 #include <netdb.h>
 
-
-
 #include "server.h"
-#include "nopeutils.h"
 
 #define LISTENQ  1024  /* second argument to listen() */
 #define MAXLINE 1024   /* max length of a line */
@@ -112,6 +109,17 @@ void free_fd_data(FdData *fd) {
 	fd->withinHeaderIdx = 0;
 }
 
+/* Free thy mallocs */
+void freeHeaders(char **headers)
+{
+	int i=0;
+	while (headers[i]!=NULL) {
+		free(headers[i]);
+		i++;
+	}
+	free(headers);
+}
+
 typedef struct {
 	int rio_fd;                 /* descriptor for this buf */
 	size_t rio_cnt;                /* unread byte in this buf */
@@ -129,23 +137,6 @@ typedef struct {
 } http_request;
 
 char *default_mime_type = "text/plain";
-
-/**********************************************************************/
-/* Inform the client that the requested web method has not been
- * implemented.
- * Parameter: the client socket */
-/**********************************************************************/
-void unimplemented(int client)
-{
-	STATIC_SEND(client, "HTTP/1.0 501 Method Not Implemented\r\n", 0);
-	STATIC_SEND(client, SERVER_STRING, 0);
-	STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
-	STATIC_SEND(client, "\r\n", 0);
-	STATIC_SEND(client, "<HTML><HEAD><TITLE>Method Not Implemented\r\n", 0);
-	STATIC_SEND(client, "</TITLE></HEAD>\r\n", 0);
-	STATIC_SEND(client, "<BODY><P>HTTP request method not supported.\r\n", 0);
-	STATIC_SEND(client, "</P></BODY></HTML>\r\n", 0);
-}
 
 void rio_readinitb(rio_t *rp, int fd){
 	rp->rio_fd = fd;

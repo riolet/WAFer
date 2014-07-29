@@ -108,8 +108,8 @@ char * getQueryPath(const char * reqString)
 }
 
 
-/* Just like fprintf, but writing to the socket instead of a
- * file.
+/* This is like dprintf on post 2008 POSIX
+ * You can use FDPRINTF which might use dprintf if it is available
  * Parameters: the client, format
  * Returns: the number of characters printed
  */
@@ -147,18 +147,6 @@ long nprintf (int client, const char *format, ...)
 
 	free(buf);
 	return done;
-}
-
-
-/* Free thy mallocs */
-void freeHeaders(char **headers)
-{
-	int i=0;
-	while (headers[i]!=NULL) {
-		free(headers[i]);
-		i++;
-	}
-	free(headers);
 }
 
 char * getHeader(char **headers, char *header)
@@ -211,8 +199,8 @@ void serveDownloadableFile(int client, const char *filename, const char *display
 	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
 	STATIC_SEND(client, SERVER_STRING, 0);
 
-	nprintf(client, "Content-Type: %s\r\n",type);
-	nprintf(client, "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
+	FDPRINTF(client, "Content-Type: %s\r\n",type);
+	FDPRINTF(client, "Content-Disposition: attachment; filename=\"%s\"\r\n",displayFilename);
 
 	STATIC_SEND(client, "\r\n", 0);
 
@@ -230,12 +218,12 @@ void serveFile(int client, const char *filename, const char * type)
 {
 	FILE *resource = NULL;
 
-	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
-	STATIC_SEND(client, SERVER_STRING, 0);
+	FDPRINT(client, "HTTP/1.0 200 OK\r\n");
+	FDPRINT(client, SERVER_STRING);
 
-	nprintf(client, "Content-Type: %s\r\n",type);
+	FDPRINTF(client, "Content-Type: %s\r\n",type);
 
-	STATIC_SEND(client, "\r\n", 0);
+	FDPRINT(client, "\r\n");
 
 	resource = fopen(filename, "r");
 	if (resource == NULL) {
@@ -265,53 +253,21 @@ ssize_t writeLongString(int client,const char* longString, size_t len)
 }
 
 
-
 /**********************************************************************/
-/* Get a line from a socket, whether the line ends in a newline,
- * carriage return, or a CRLF combination.  Terminates the string read
- * with a null character.  If no newline indicator is found before the
- * end of the buffer, the string is terminated with a null.  If any of
- * the above three line terminators is read, the last character of the
- * string will be a linefeed and the string will be terminated with a
- * null character.
- * Parameters: the socket descriptor
- *             the buffer to save the data in
- *             the size of the buffer
- * Returns: the number of bytes stored (excluding null) */
+/* Inform the client that the requested web method has not been
+ * implemented.
+ * Parameter: the client socket */
 /**********************************************************************/
-int getLine(int sock, char *buf, int size)
+void unimplemented(int client)
 {
-	int i = 0;
-	char c = '\0';
-	int n;
-
-	while ((i < size - 1) && (c != '\n'))
-	{
-		n = recv(sock, &c, 1, 0);
-		if (n<0) {
-			return n;
-		}
-		/* DEBUG printf("%02X\n", c); */
-		if (n > 0)
-		{
-			if (c == '\r')
-			{
-				n = recv(sock, &c, 1, MSG_PEEK);
-				/* DEBUG printf("%02X\n", c); */
-				if ((n > 0) && (c == '\n'))
-					recv(sock, &c, 1, 0);
-				else
-					c = '\n';
-			}
-			buf[i] = c;
-			i++;
-		}
-		else
-			c = '\n';
-	}
-	buf[i] = '\0';
-
-	return(i);
+	FDPRINT(client, "HTTP/1.0 501 Method Not Implemented\r\n");
+	FDPRINT(client, SERVER_STRING);
+	FDPRINT(client, "Content-Type: text/html\r\n");
+	FDPRINT(client, "\r\n");
+	FDPRINT(client, "<HTML><HEAD><TITLE>Method Not Implemented\r\n");
+	FDPRINT(client, "</TITLE></HEAD>\r\n");
+	FDPRINT(client, "<BODY><P>HTTP request method not supported.\r\n");
+	FDPRINT(client, "</P></BODY></HTML>\r\n");
 }
 
 /**********************************************************************/
@@ -319,14 +275,14 @@ int getLine(int sock, char *buf, int size)
 /**********************************************************************/
 void notFound(int client)
 {
-	nprintf(client, "HTTP/1.0 404 NOT FOUND\r\n");
-	nprintf(client, "Content-Type: text/html\r\n");
-	nprintf(client, "\r\n");
-	nprintf(client, "<HTML><TITLE>Not Found</TITLE>\r\n");
-	nprintf(client, "<BODY><P>The server could not fulfill\r\n");
-	nprintf(client, "your request because the resource specified\r\n");
-	nprintf(client, "is unavailable or nonexistent.\r\n");
-	nprintf(client, "</P></BODY></HTML>\r\n");
+	FDPRINT(client, "HTTP/1.0 404 NOT FOUND\r\n");
+	FDPRINT(client, "Content-Type: text/html\r\n");
+	FDPRINT(client, "\r\n");
+	FDPRINT(client, "<HTML><TITLE>Not Found</TITLE>\r\n");
+	FDPRINT(client, "<BODY><P>The server could not fulfill\r\n");
+	FDPRINT(client, "your request because the resource specified\r\n");
+	FDPRINT(client, "is unavailable or nonexistent.\r\n");
+	FDPRINT(client, "</P></BODY></HTML>\r\n");
 }
 
 char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr)
@@ -334,7 +290,7 @@ char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
 	if (strcmp(qparam,UNDEFINED)==0) {
-		nprintf(client,
+		FDPRINTF(client,
 			OTAGA(form,action="%s")
 			"%s%s"
 			STAG(input,type="submit")
@@ -349,7 +305,7 @@ char * _hscan(int client, const char * reqStr, const char *msg,const char * inpu
 {
 	char * qpath=getQueryPath(reqStr);
 	char * qparam=getQueryParam(reqStr,"q");
-	nprintf(client,
+	FDPRINTF(client,
 		OTAGA(form,action="%s")
 		"%s%s"
 		STAG(input,type="submit")
