@@ -10,13 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
-#ifdef __APPLE__
-	#include <sys/uio.h>
-#else
-	#include <sys/sendfile.h>
-#endif
-
-
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -239,9 +232,12 @@ int open_listenfd(int port){
 
 	// 6 is TCP's protocol number
 	// enable this, much faster : 4000 req/s -> 17000 req/s
+
+	#ifdef TCP_CORK
 	if (setsockopt(listenfd, 6, TCP_CORK,
 		       (const void *)&optval , sizeof(int)) < 0)
 		return -1;
+	#endif
 
 	/* Listenfd will be an endpoint for all requests to port
 	   on any IP address for this host */
