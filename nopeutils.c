@@ -174,6 +174,12 @@ char * getHeader(char **headers, char *header)
 }
 
 
+void sendHeadersFromString(Request request,const char *headerString) {
+	int client=request.client;
+	FDPRINTF(client, "%s", headerString,0);
+	STATIC_SEND(client, "\r\n", 0);
+}
+
 void sendHeadersTypeEncoding(Request request,const char *type, const char * encoding)
 {
 	int client=request.client;
@@ -183,17 +189,20 @@ void sendHeadersTypeEncoding(Request request,const char *type, const char * enco
 	if (encoding!=NULL) {
 		FDPRINTF(client, "Content-Encoding: %s\r\n", encoding,0);
 	}
-
+	STATIC_SEND(client, "Vary: Accept-Encoding\r\n", 0);
 	STATIC_SEND(client, "\r\n", 0);
 }
 
+/* Deprecated */
 void writeStandardHeaders(int client)
 {
 	STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
 	STATIC_SEND(client, SERVER_STRING, 0);
 	STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
+	STATIC_SEND(client, "Vary: Accept-Encoding\r\n", 0);
 	STATIC_SEND(client, "\r\n", 0);
 }
+/*End deprecated */
 
 void cat(int client, FILE *pFile)
 {

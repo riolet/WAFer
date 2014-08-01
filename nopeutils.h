@@ -108,5 +108,5 @@ bool nope_route(Request request, const char * path, void (* function)(Request),b
 #define ENCODING_GZIP "gzip"
 
 #define SEND_TEXT_HTML_HEADER(request) sendHeadersTypeEncoding(request,MIME_TEXT_HTML, NULL)
-#define SEND_TEXT_HTML_GZIP_HEADER(request) sendHeadersTypeEncoding(request,MIME_TEXT_HTML, ENCODING_GZIP)
+
 #endif /* NOPEUTILS_H_ */

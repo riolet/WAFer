@@ -75,7 +75,7 @@ void new_fd_data(FdData *fd) {
 	fd->readBuffer = malloc((MAX_REQUEST_SIZE+1)*SIZE_OF_CHAR);
 	fd->method = malloc((MAX_METHOD_SIZE+1)*SIZE_OF_CHAR);
 	fd->uri = malloc((MAX_REQUEST_SIZE+1)*SIZE_OF_CHAR);
-	fd->ver = malloc(MAX_HEADERS*SIZE_OF_CHAR);
+	fd->ver = malloc((MAX_VER_SIZE+1)*SIZE_OF_CHAR);
 	fd->headers = malloc(MAX_HEADERS*sizeof(char*));
 	fd->readBufferIdx = 0;
 	fd->readBufferLen = 0;
@@ -159,10 +159,9 @@ int open_listenfd(int port){
 	return listenfd;
 }
 
-void log_access(int status, struct sockaddr_in *c_addr, http_request *req)
+void log_access(int status, const char * remote_ip, Request request)
 {
-	printf("%s:%d %d - %s\n", c_addr ? inet_ntoa(c_addr->sin_addr) : "unknown",
-	       c_addr ? ntohs(c_addr->sin_port) : -1, status, req->filename);
+	printf("%s:%d %d - %s\n", remote_ip, request.reqStr);
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -402,7 +401,7 @@ void select_loop(int listenfd)
 
 				http_request req;
 				snprintf(req.filename,sizeof(req.filename)-1,"%s",fdDataList[i].uri);
-				log_access(STATUS_HTTP_OK, NULL, &req);
+				/* log_access(STATUS_HTTP_OK, remote_ip, request); */
 				if (fdDataList[i].state!=STATE_PRE_REQUEST)
 					free_fd_data(&fdDataList[i]);
 				fdDataList[i].state = STATE_PRE_REQUEST;
