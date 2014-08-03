@@ -6,7 +6,6 @@ typedef int bool;
 #define true 1
 #define false 0
 
-
 #define SERVER_STRING "Server: nope.chttpd/0.1.0\r\n"
 #define ToHex(Y) (Y>='0'&&Y<='9'?Y-'0':Y-'A'+10)
 #define UNDEFINED "VALUE_UNDEFINED"
@@ -31,17 +30,16 @@ typedef int bool;
 
 #define STATUS_HTTP_OK 200
 
-
 typedef struct struct_request {
-	int client;
-	char * reqStr;
-	char * method;
-	char **headers;
+    int client;
+    char *reqStr;
+    char *method;
+    char **headers;
 } Request;
 
 void freeHeaders(char **);
-long dbgprintf (const char *format, ...);
+long dbgprintf(const char *format, ...);
 
 void server(Request request);
 
-#endif /* NOPE_H_ */
+#endif                          /* NOPE_H_ */

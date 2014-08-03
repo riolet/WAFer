@@ -14,20 +14,19 @@
 #define CRLF "\r\n"
 #define ATTR(key,value) STR(key) STR(=) STR(value)
 
-#define LT(tag) STR(<) STR(tag) WSPC	/*<tag */
-#define LTA(tag,attributes) LT(tag) STR(attributes) WSPC	/*<tag */
-#define GT STR(>)						/*<*/
+#define LT(tag) STR(<) STR(tag) WSPC    /*<tag */
+#define LTA(tag,attributes) LT(tag) STR(attributes) WSPC        /*<tag */
+#define GT STR(>)               /*< */
 
+#define OTAG(tag) LT(tag) GT    /*<tag> */
+#define OTAGA(tag,attributes) LTA(tag,attributes) GT    /*<tag attributes> */
+#define CTAG(tag) STR(</) STR(tag) GT   /*</tag> */
 
-#define OTAG(tag) LT(tag) GT	/*<tag>*/
-#define OTAGA(tag,attributes) LTA(tag,attributes) GT	/*<tag attributes>*/
-#define CTAG(tag) STR(</) STR(tag) GT	/*</tag>*/
+#define ESTAG(tag) LT(tag) WSPC STR(/) GT       /*<tag attributes /> */
+#define STAG(tag,attributes) LTA(tag,attributes) WSPC STR(/) GT /*<tag attributes /> */
 
-#define ESTAG(tag) LT(tag) WSPC STR(/) GT	/*<tag attributes /> */
-#define STAG(tag,attributes) LTA(tag,attributes) WSPC STR(/) GT	/*<tag attributes /> */
-
-#define QTAG(tag,text) OTAG(tag) text CTAG(tag)	/*<tag> text </tag>*/
-#define QTAGA(tag,attributes,text) OTAGA(tag,attributes) text CTAG(tag)	/*<tag attributes> text </tag>*/
+#define QTAG(tag,text) OTAG(tag) text CTAG(tag) /*<tag> text </tag> */
+#define QTAGA(tag,attributes,text) OTAGA(tag,attributes) text CTAG(tag) /*<tag attributes> text </tag> */
 
 /* Extensions */
 #define QLINK(url,text) QTAGA(a,href=url,text)
@@ -55,49 +54,51 @@
 #define FDPRINTF nprintf
 #define FDPRINT(_socket, _str) STATIC_SEND(_socket, _str,0)
 
-bool stringEqualsLitLen(const char *varStr,const char *litStr,int litStrLen);
+bool stringEqualsLitLen(const char *varStr, const char *litStr, int litStrLen);
 #define STREQLIT(var,lit) stringEqualsLitLen(var,lit,sizeof lit)
-
 
 #include <stdarg.h>
 #include <stdlib.h>
 #ifdef __APPLE__
-	#include <sys/uio.h>
+#include <sys/uio.h>
 #endif
-char ** readHeaders(int);
+char **readHeaders(int);
 int getLine(int, char *, int);
 void not_found(int);
-void docwrite(int,const char*);
-long nprintf (int, const char *, ...);
-char ** sendAndReceiveHeaders(int);
-char * getQueryPath(const char *);
-char * getQueryParam(const char *, const char *);
+void docwrite(int, const char *);
+long nprintf(int, const char *, ...);
+char **sendAndReceiveHeaders(int);
+char *getQueryPath(const char *);
+char *getQueryParam(const char *, const char *);
 void writeStandardHeaders(int);
-ssize_t writeLongString(int,const char*, size_t);
+ssize_t writeLongString(int, const char *, size_t);
 void serveFile(int, const char *, const char *);
-char * dupstr (const char *);
+char *dupstr(const char *);
 
 void unimplemented(int client);
 void not_found(int client);
 
-char * _hscan(int client, const char * reqStr, const char *msg,const char *inputstr);
-char * _hscanIfEmpty(int client, const char * reqStr, const char *msg,const char * inputstr);
+char *_hscan(int client, const char *reqStr, const char *msg, const char *inputstr);
+char *_hscanIfEmpty(int client, const char *reqStr, const char *msg,
+                    const char *inputstr);
 
-#define STAGPARAMQ(tag,attributes) LTA(tag,attributes) ATTR(name,STR(q)) WSPC STR(/) GT	/*<tag attributes name="q" /> */
-#define QTAGAPARAMQ(tag,attributes,text) OTAGA(tag,attributes name=STR(q)) text CTAG(tag)	/*<tag attributes> text </tag>*/
+#define STAGPARAMQ(tag,attributes) LTA(tag,attributes) ATTR(name,STR(q)) WSPC STR(/) GT /*<tag attributes name="q" /> */
+#define QTAGAPARAMQ(tag,attributes,text) OTAGA(tag,attributes name=STR(q)) text CTAG(tag)       /*<tag attributes> text </tag> */
 #define HSCANIT(client,reqStr,msg) _hscan(client,reqStr,msg,STAGPARAMQ(input,type="text"))
 #define HSCANITIE(client,reqStr,msg) _hscanIfEmpty(client,reqStr,msg,STAGPARAMQ(input,type="text"))
 #define HSCAN(client,reqStr,msg,tag,attributes,text) _hscan(client,reqStr,msg,QTAGAPARAMQ(tag,attributes,text))
 
-
 /* Deprecated */
-bool route(Request request, const char * path);
-bool routef(Request request, const char * path, void (* function)(int, const char *, const char*));
-bool routeh(Request request, const char * path);
-bool routefh(Request request, const char * path, void (* function)(int, const char *, const char*));
+bool route(Request request, const char *path);
+bool routef(Request request, const char *path,
+            void (*function) (int, const char *, const char *));
+bool routeh(Request request, const char *path);
+bool routefh(Request request, const char *path,
+             void (*function) (int, const char *, const char *));
 /* End deprecated */
 
-bool nope_route(Request request, const char * path, void (* function)(Request),bool send_headers);
+bool nope_route(Request request, const char *path, void (*function) (Request),
+                bool send_headers);
 
 #define ROUTE_INLINE(request,path)	nope_route(request, path, NULL,false)
 #define ROUTE_FUNCTION(request,path,function)	nope_route(request, path, function,false)
@@ -109,4 +110,4 @@ bool nope_route(Request request, const char * path, void (* function)(Request),b
 
 #define SEND_TEXT_HTML_HEADER(request) sendHeadersTypeEncoding(request,MIME_TEXT_HTML, NULL)
 
-#endif /* NOPEUTILS_H_ */
+#endif                          /* NOPEUTILS_H_ */
