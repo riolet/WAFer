@@ -119,12 +119,11 @@ long dbgprintf (const char *format, ...)
 {
 	long done=0;
 #ifdef DEBUG
-	char *buf = malloc(MAX_BUFFER_SIZE);
 	int len;
 	va_list arg;
 	long done;
 	va_start (arg, format);
-	vprintf (format, arg);
+	done=vprintf (format, arg);
 	va_end (arg);
 #endif
 	return done;
