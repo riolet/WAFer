@@ -59,7 +59,7 @@ char * getQueryParam(const char * queryString, const char *name)
 
 	buffer=bufferQuestion;
 	pos1 = strstr(queryString,bufferQuestion);
-	printf ("Buffer %s Pos %s\n",buffer,pos1);
+	dbgprintf ("Buffer %s Pos %s\n",buffer,pos1);
 	if (!pos1) {
 		buffer=bufferAmpersand;
 		pos1 = strstr(queryString, bufferAmpersand);

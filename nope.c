@@ -115,6 +115,21 @@ void freeHeaders(char **headers)
 	free(headers);
 }
 
+long dbgprintf (const char *format, ...)
+{
+	long done=0;
+#ifdef DEBUG
+	char *buf = malloc(MAX_BUFFER_SIZE);
+	int len;
+	va_list arg;
+	long done;
+	va_start (arg, format);
+	vprintf (format, arg);
+	va_end (arg);
+#endif
+	return done;
+}
+
 /* Simplifies calls to bind(), connect(), and accept() */
 typedef struct sockaddr SA;
 
@@ -161,7 +176,7 @@ int open_listenfd(int port){
 
 void log_access(int status, const char * remote_ip, Request request)
 {
-	printf("%s:%d %d - %s\n", remote_ip, request.reqStr);
+	printf("%s:%d %d - %s\n", remote_ip, status, 0,request.reqStr);
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -196,7 +211,7 @@ void accept_connection(FdData *fds, int i, int listenfd, char *remote_ip, int *f
 		if (newfd > *fdmax) {    // keep track of the max
 			*fdmax = newfd;
 		}
-		printf("selectserver: new connection from %s on "
+		dbgprintf("selectserver: new connection from %s on "
 		       "socket %d\n",
 		       inet_ntop(remoteaddr.ss_family,
 				 get_in_addr((struct sockaddr*)&remoteaddr),
@@ -212,7 +227,7 @@ void shutdown_connection(FdData *fds, int i, ssize_t nbytes, fd_set *master)
 	/* got error or connection closed by client */
 	if (nbytes == 0) {
 		/* connection closed */
-		printf("selectserver: socket %d hung up\n", i);
+		dbgprintf("selectserver: socket %d hung up\n", i);
 	} else {
 		perror("recv");
 	}
@@ -405,7 +420,7 @@ void select_loop(int listenfd)
 				if (fdDataList[i].state!=STATE_PRE_REQUEST)
 					free_fd_data(&fdDataList[i]);
 				fdDataList[i].state = STATE_PRE_REQUEST;
-				printf("A job well done on %d\n",i);
+				dbgprintf("A job well done on %d\n",i);
 				close(i); // bye!
 				FD_CLR(i, &master); // remove from master set
 			}
@@ -433,7 +448,7 @@ int main(void){
 
 	listenfd = open_listenfd(default_port);
 	if (listenfd > 0) {
-		printf("listen on port %d, fd is %d\n", default_port, listenfd);
+		dbgprintf("listen on port %d, fd is %d\n", default_port, listenfd);
 	} else {
 		perror("ERROR");
 		exit(listenfd);
@@ -447,12 +462,16 @@ int main(void){
 		if (pid == 0) {         //  child
 			select_loop(listenfd);
 		} else if (pid > 0) {   //  parent
-			printf("child pid is %d\n", pid);
+			dbgprintf("child pid is %d\n", pid);
 		} else {
 			perror("fork");
 		}
 	}
 
+	if (nChildren==0) {				/* Non-blocking if single threaded */
+		if (fcntl(listenfd, F_SETFL, fcntl(listenfd, F_GETFL, 0) | O_NONBLOCK)<0)
+			perror("fcntl");
+	}
 	select_loop(listenfd);
 	return 0;
 }

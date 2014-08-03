@@ -19,6 +19,7 @@ typedef int bool;
 #define MAX_METHOD_SIZE 64
 #define MAX_VER_SIZE 64
 #define MAX_REQUEST_SIZE 8192
+#define MAX_EVENTS 1024
 
 /* Define HTTP request parsing states */
 #define STATE_PRE_REQUEST 0
@@ -39,6 +40,7 @@ typedef struct struct_request {
 } Request;
 
 void freeHeaders(char **);
+long dbgprintf (const char *format, ...);
 
 void server(Request request);
 
