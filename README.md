@@ -8,8 +8,18 @@ Default port is 4242. Set environment variable 'PORT' to change it.
 
 That's really it. The source comes with a simple example that prints "Hello World" to get your started.
 
+###Concurrency Handling
 
-##Note to Contributors
+You can choose between:
+
+1. Single process with non-blocking IO with select() (Default)
+
+2. Single process with non-blocking IO with epoll()  (Define EPOLL when compiling)
+
+3. Multiple fork()ed processeses with blocking IO (Set CHILDREN environmment variable to greater than zero)
+
+###Note to Contributors
+
 Thank you for making this a wonderful project!
 
 Here's our preferred formatting style:
@@ -17,7 +27,7 @@ Here's our preferred formatting style:
   `find . \( -name '*.c' -o -name '*.h' \) -exec indent --no-tabs  --linux-style --line-length 90 --indent-level 4 -bli0 \{\} \;`
   
 
-##Acknowledgements
+###Acknowledgements
 
 1. [J. David Blackstone](http://sourceforge.net/u/jdavidb/profile/) and [Feng Shen](https://github.com/shenfeng), whose web servers have been repurposed to build this platform.
 

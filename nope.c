@@ -34,7 +34,7 @@
 #define RIO_BUFSIZE 1024
 
 #define DEFAULT_PORT 4242
-#define DEFAULT_N_CHILDREN 15
+#define DEFAULT_N_CHILDREN 0
 
 #define SIZE_OF_CHAR sizeof(char)
 
