@@ -11,7 +11,9 @@ That's really it. The source comes with a simple example that prints "Hello Worl
 
 ##Note to Contributors
 Thank you for making this a wonderful project!
+
 Here's our preferred formatting style:
+
   `find . \( -name '*.c' -o -name '*.h' \) -exec indent --no-tabs  --linux-style --line-length 90 --indent-level 4 -bli0 \{\} \;`
   
 
