@@ -89,7 +89,6 @@ void new_fd_data(FdData * fd)
     fd->headers = malloc(MAX_HEADERS * sizeof(char *));
     fd->readBufferIdx = 0;
     fd->readBufferLen = 0;
-    fd->readBufferIdx = 0;
     fd->methodIdx = 0;
     fd->uriIdx = 0;
     fd->verIdx = 0;
@@ -107,7 +106,6 @@ void free_fd_data(FdData * fd)
     free(fd->ver);
     fd->readBufferIdx = 0;
     fd->readBufferLen = 0;
-    fd->readBufferIdx = 0;
     fd->methodIdx = 0;
     fd->uriIdx = 0;
     fd->verIdx = 0;
