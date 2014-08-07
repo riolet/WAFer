@@ -37,6 +37,22 @@ typedef struct struct_request {
     char **headers;
 } Request;
 
+typedef struct {
+	short int state;
+	char *readBuffer;
+	short readBufferIdx;
+	short readBufferLen;
+	char *method;
+	short methodIdx;
+	char *uri;
+	short uriIdx;
+	char *ver;
+	short verIdx;
+	char **headers;
+	short headersIdx;
+	short withinHeaderIdx;
+} FdData;
+
 void freeHeaders(char **);
 long dbgprintf(const char *format, ...);
 

@@ -154,6 +154,10 @@ char *getHeader(char **headers, char *header)
     char *current_header, *matching_header, *value;
     // Not sure if MAX_BUFFER_SIZE is right.
     char *retval = malloc(MAX_BUFFER_SIZE * sizeof(char));
+    if (retval == NULL) {
+        printf("Could not allocate memory.");
+        exit(EXIT_FAILURE);
+    }
     int i;
     for (i = 0; headers[i] != NULL; i++) {
         current_header = headers[i];
