@@ -1,6 +1,17 @@
 #ifndef NOPE_H_
 #define NOPE_H_
 
+/* Colors. Why not ? */
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+#define RESET   "\033[0m"
+
 /* Define boolean */
 typedef int bool;
 #define true 1
@@ -52,6 +63,50 @@ typedef struct {
 	short headersIdx;
 	short withinHeaderIdx;
 } FdData;
+
+#define LISTENQ  1024           /* second argument to listen() */
+#define MAXLINE 1024            /* max length of a line */
+#define RIO_BUFSIZE 1024
+
+#define DEFAULT_PORT 4242
+#define DEFAULT_N_CHILDREN 0
+
+#define SIZE_OF_CHAR sizeof(char)
+#define LOG_ERROR_ON(_statement_,_condition_,_message_) do { if ((_statement_)==_condition_) fprintf(stderr,_message_); } while(0)
+#define LOG_ERROR_ON_NULL(_statement_,_message_) LOG_ERROR_ON(_statement_,NULL,_message_)
+
+/*Thread stuff!*/
+#ifdef NOPE_THREADS
+#define QUEUESIZE NOPE_THREADS*64
+
+/* select_loop stuff */
+typedef struct {
+	Request request;
+	int fd;
+	FdData *fdDataList;
+	fd_set *pMaster;
+} THREAD_DATA;
+
+typedef struct {
+	THREAD_DATA buf[QUEUESIZE];
+	long head, tail;
+	int full, empty;
+	pthread_mutex_t *mut;
+	pthread_cond_t *notFull, *notEmpty;
+} queue;
+
+pthread_mutex_t *fd_mutex;
+
+queue * fifo;
+queue * cleaner_fifo;
+
+void farmer_thread (THREAD_DATA);
+void *worker_thread (void);
+queue *queueInit (void);
+void queueDelete (queue *q);
+void queueAdd (queue *q, THREAD_DATA in);
+void queueDel (queue *q, THREAD_DATA *out);
+#endif
 
 void freeHeaders(char **);
 long dbgprintf(const char *format, ...);

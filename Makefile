@@ -13,18 +13,20 @@ ifdef PROCESSES
 endif
 
 ifdef LOOP
-	ifeq ($(LOOP_OPT),epoll) 
+	ifeq ($(LOOP),epoll) 
 		LOOP_OPT=-D NOPE_EPOLL
 	endif	
 endif
 
+EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT)
+
 CC=gcc
 AR=ar
-CFLAGS=-W -Wall -O2 -Wno-unused-parameter -g
+CFLAGS=-W -Wall -O2 -Wno-unused-parameter -g $(EXT_OPTIONS)
 LIBNOPE_OBJ=nope.o nopeutils.o
 LIBNOPE=libnope.a
 MODULES=server factor
-EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT)
+
 all: $(MODULES)
 
 # rule to build modules

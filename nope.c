@@ -33,15 +33,6 @@
 
 #include "nope.h"
 
-#define LISTENQ  1024           /* second argument to listen() */
-#define MAXLINE 1024            /* max length of a line */
-#define RIO_BUFSIZE 1024
-
-#define DEFAULT_PORT 4242
-#define DEFAULT_N_CHILDREN 0
-
-#define SIZE_OF_CHAR sizeof(char)
-
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
 		if (isspace(fdDataList[i].readBuffer[j])) {\
 			_str_[idx]=0;\
@@ -66,38 +57,6 @@
 	_str_[idx] = fdDataList[i].readBuffer[j];\
 	idx++;\
 		}
-
-/*Thread stuff!*/
-#ifdef NOPE_THREADS
-#define QUEUESIZE NOPE_THREADS*64
-
-/* select_loop stuff */
-typedef struct {
-	Request request;
-	int fd;
-	FdData *fdDataList;
-	fd_set *pMaster;
-} THREAD_DATA;
-
-typedef struct {
-	THREAD_DATA buf[QUEUESIZE];
-	long head, tail;
-	int full, empty;
-	pthread_mutex_t *mut;
-	pthread_cond_t *notFull, *notEmpty;
-} queue;
-
-pthread_mutex_t *fd_mutex;
-queue * fifo;
-
-void farmer_thread (THREAD_DATA);
-void *worker_thread (void);
-queue *queueInit (void);
-void queueDelete (queue *q);
-void queueAdd (queue *q, THREAD_DATA in);
-void queueDel (queue *q, THREAD_DATA *out);
-#endif
-
 
 void new_fd_data(FdData * fd)
 {
@@ -252,18 +211,15 @@ void shutdown_connection(FdData * fds, int i, ssize_t nbytes, fd_set * pMaster)
 	if (fds[i].state != STATE_PRE_REQUEST)
 		free_fd_data(&fds[i]);
 	fds[i].state = STATE_PRE_REQUEST;
-#ifdef NOPE_THREADS
-	pthread_mutex_lock (fd_mutex);
+
 	FD_CLR(i, pMaster);     // remove from master set
-	pthread_mutex_unlock (fd_mutex);
-#else
-	FD_CLR(i, pMaster);     // remove from master set
-#endif
+
 	close(i);
 }
 
 void clear_connection_baggage(FdData * fdDataList, int fd, fd_set * pMaster)
 {
+	/*Todo: Merge with shutdown_connection() */
 	if (fdDataList[fd].state != STATE_PRE_REQUEST)
 		free_fd_data(&fdDataList[fd]);
 	fdDataList[fd].state = STATE_PRE_REQUEST;
@@ -271,24 +227,18 @@ void clear_connection_baggage(FdData * fdDataList, int fd, fd_set * pMaster)
 	int result;
 	if (pMaster!=NULL) {
 		dbgprintf("Clearing connection baggage for %d\n",fd);
-#ifdef NOPE_THREADS
-			pthread_mutex_lock (fd_mutex);
-			FD_CLR(fd, pMaster);     // remove from master set
-			pthread_mutex_unlock (fd_mutex);
-#else
-			FD_CLR(fd, pMaster);     // remove from master set
-#endif
-			result=shutdown(fd,2);
-			if (result==-1) {
-				perror("shutdown");
-			}
-			dbgprintf("Shutdown for %d is %d\n",fd,result);
-	} else {
-		result=close(fd);       // bye!
+		FD_CLR(fd, pMaster);     /*In Select mode only */
+		result=shutdown(fd,2);
 		if (result==-1) {
-			perror("close");
+			perror("shutdown");
 		}
+		dbgprintf("Shutdown for %d is %d\n",fd,result);
 	}
+	result=close(fd);
+	if (result==-1) {
+		perror("close");
+	}
+
 }
 
 int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
@@ -424,6 +374,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 			td.fdDataList=fdDataList;
 			td.pMaster=pMaster;
 			td.request=request;
+			dbgprintf("SM:Farming %d\n",td);
 			farmer_thread(td);
 			done=false;
 #else
@@ -434,15 +385,16 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 	return done;
 }
 
-void select_loop(int listenfd)
-{
 #ifdef NOPE_THREADS
+void initialize_threads()
+{
+
 		pthread_t *con=malloc(sizeof(pthread_t*)*NOPE_THREADS);
 
-		fifo = queueInit ();
-		if (fifo ==  NULL) {
-			fprintf (stderr, "main: Queue Init failed.\n");
-		}
+		LOG_ERROR_ON_NULL(fifo = queueInit (),"main: Clean queue Init failed.\n");
+
+		LOG_ERROR_ON_NULL(cleaner_fifo = queueInit (),"main: Clean queue Init failed.\n");
+
 		dbgprintf("Creating threads\n");
 		int i;
 		fd_mutex=(pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
@@ -452,7 +404,12 @@ void select_loop(int listenfd)
 			con+=sizeof(pthread_t*);
 		}
 
+}
 #endif
+
+void select_loop(int listenfd)
+{
+
 	/* Common vars */
 
 	int nbytes;
@@ -490,8 +447,10 @@ void select_loop(int listenfd)
 
 	/* Epoll main loop */
 	while (1) {
+#ifdef NOPE_THREADS
+		cleaner_thread ();	/*Run the thread clearer */
+#endif
 		int n, e;
-
 		n = epoll_wait(eventfd, events, MAX_EVENTS, -1);
 		for (e = 0; e < n; e++) {
 			if ((events[e].events & EPOLLERR) ||
@@ -599,19 +558,23 @@ void select_loop(int listenfd)
 
 	/* Select main loop */
 	while (1) {
+
 #ifdef NOPE_THREADS
-			pthread_mutex_lock (fd_mutex);
-			read_fds = master;      /* copy it */
-			pthread_mutex_unlock (fd_mutex);
-#else
-			read_fds = master;      /* copy it */
+		cleaner_thread ();	/*Run the thread clearer */
 #endif
 
-		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1) {
+		read_fds = master;      /* copy it */
+
+	    struct timeval tv;
+	    tv.tv_sec = 1;
+	    tv.tv_usec = 0;
+
+		dbgprintf(KRED "Select blocking\n" KNRM);
+		if (select(fdmax + 1, &read_fds, NULL, NULL, &tv) == -1) {
 			perror("select");
 			exit(4);
 		}
-
+		dbgprintf(KRED "Select blocked\n" KNRM);
 		/* run through the existing connections looking for data to read */
 		for (fd = 0; fd <= fdmax; fd++) {
 			if (!FD_ISSET(fd, &read_fds))        // we got one!!
@@ -641,10 +604,12 @@ void select_loop(int listenfd)
 }
 
 #ifdef NOPE_THREADS
-/*More thread stuff */
+
 void farmer_thread (THREAD_DATA td)
 {
+	dbgprintf(KYEL "farmer: Gonna get the the mutex for %d\n" KYEL,td.fd);
 	pthread_mutex_lock (fifo->mut);
+	dbgprintf(KYEL "farmer: Got the the mutex %d\n" KYEL,td.fd);
 	while (fifo->full) {
 		printf ("producer: queue FULL.\n");
 		pthread_cond_wait (fifo->notFull, fifo->mut);
@@ -654,6 +619,23 @@ void farmer_thread (THREAD_DATA td)
 	pthread_cond_signal (fifo->notEmpty);
 }
 
+void cleaner_thread ()
+{
+	THREAD_DATA td;
+	dbgprintf(KMAG "cleaner: Gonna get the the mutex\n" KNRM);
+	pthread_mutex_lock (cleaner_fifo->mut);
+	dbgprintf(KMAG "cleaner: Got the mutex\n" KNRM);
+	if (cleaner_fifo->empty) {
+		dbgprintf (KMAG "cleaner: queue EMPTY.\n" KNRM);
+		pthread_mutex_unlock (cleaner_fifo->mut);
+	} else {
+		queueDel (cleaner_fifo, &td);
+		dbgprintf(KMAG "cleaner: cleaning %d\n" KNRM,td.fd);
+		pthread_mutex_unlock (cleaner_fifo->mut);
+		pthread_cond_signal (cleaner_fifo->notFull);
+		clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
+	}
+}
 
 void *worker_thread (void)
 {
@@ -662,24 +644,32 @@ void *worker_thread (void)
 
 	dbgprintf("Creating consumer\n");
 	for (;;) {
-		dbgprintf("Gonna get the the mutex\n");
+		dbgprintf(KBLU "Worker: Gonna get the the mutex\n" KNRM);
 		pthread_mutex_lock (fifo->mut);
-		dbgprintf("Got the mutex\n");
+		dbgprintf(KBLU "Worker: Got the mutex\n" KNRM);
 		while (fifo->empty) {
-			dbgprintf ("consumer: queue EMPTY.\n");
+			dbgprintf ("Worker: task queue EMPTY.\n");
 			pthread_cond_wait (fifo->notEmpty, fifo->mut);
 		}
-		dbgprintf("Queue popping\n");
 		queueDel (fifo, &td);
+		dbgprintf(KGRN "Worker: starting  %d\n" KNRM,td.fd);
 		pthread_mutex_unlock (fifo->mut);
 		pthread_cond_signal (fifo->notFull);
 		dbgprintf("td.fdDataList %d, td.fd %d, td.pMaster %d, td.request.headers0 %s\n",td.fdDataList,td.fd,td.pMaster,td.request.headers[0]);
 		server(td.request);
-		clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
+		dbgprintf(KGRN "Worker: finished  %d\n" KNRM,td.fd);
+		//clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
+		pthread_mutex_lock (cleaner_fifo->mut);
+		while (cleaner_fifo->full) {
+			printf (KCYN "Worker: clean queue FULL.\n" KNRM);
+			pthread_cond_wait (cleaner_fifo->notFull, cleaner_fifo->mut);
+		}
+		queueAdd (cleaner_fifo, td);
+		pthread_mutex_unlock (cleaner_fifo->mut);
+		pthread_cond_signal (cleaner_fifo->notEmpty);
 
-		tim.tv_sec = 0;
+		tim.tv_sec = 0;									/* Sleep for a bit */
 		tim.tv_nsec = 1000;
-
 		nanosleep(&tim , &tim2);
 	}
 }
@@ -746,7 +736,6 @@ void queueDel (queue *q, THREAD_DATA *out)
 
 int main(void)
 {
-	int i;
 	int default_port = DEFAULT_PORT;
 
 	int listenfd;
@@ -763,8 +752,7 @@ int main(void)
 		perror("ERROR");
 		exit(listenfd);
 	}
-	// Ignore SIGPIPE signal, so if browser cancels the request, it
-	// won't kill the whole process.
+	/*Ignore SIGPIPE signal, so if browser cancels the request, it won't kill the whole process. */
 	signal(SIGPIPE, SIG_IGN);
 
 #ifdef NOPE_THREADS
@@ -780,6 +768,7 @@ int main(void)
 
 	printf("The soft limit is %llu\n", limit.rlim_cur);
 	printf("The hard limit is %llu\n", limit.rlim_max);
+	initialize_threads();
 #endif
 
 #ifdef NOPE_PROCESSES
