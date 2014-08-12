@@ -176,7 +176,7 @@ void accept_connection(FdData * fds, int listenfd, char *remote_ip, int *fdmax,
 	/* handle new connections */
 	addrlen = sizeof remoteaddr;
 	newfd = accept(listenfd, (struct sockaddr *)&remoteaddr, &addrlen);
-	if (newfd > MAX_FD_SIZE) {
+	if (newfd > MAX_NO_FDS) {
 		fprintf(stderr, "Max FD Size reached. Can't continue");
 		return;
 	}
@@ -374,8 +374,9 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 			td.fdDataList=fdDataList;
 			td.pMaster=pMaster;
 			td.request=request;
-			dbgprintf("SM:Farming %d\n",td);
+			dbgprintf(KNRM "SM:Farming %d->%d\n" KNRM,fifo->head,fifo->tail);
 			farmer_thread(td);
+			dbgprintf(KNRM "SM:Done Farming %d->%d\n" KNRM,fifo->head,fifo->tail);
 			done=false;
 #else
 			server(request);
@@ -389,7 +390,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 void initialize_threads()
 {
 
-		pthread_t *con=malloc(sizeof(pthread_t*)*NOPE_THREADS);
+		pthread_t *con=malloc(sizeof(pthread_t*)*(NOPE_THREADS+1));
 
 		LOG_ERROR_ON_NULL(fifo = queueInit (),"main: Clean queue Init failed.\n");
 
@@ -400,10 +401,15 @@ void initialize_threads()
 		fd_mutex=(pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
 		pthread_mutex_init (fd_mutex, NULL);
 		for (i=0;i<NOPE_THREADS;i++) {
-			pthread_create (con, NULL, worker_thread, fifo);
+			pthread_create (con, NULL, &worker_thread, fifo);
 			con+=sizeof(pthread_t*);
 		}
-
+		socketpair(AF_UNIX, SOCK_STREAM, 0, socketpair_fd);
+		if (fcntl(socketpair_fd[0], F_SETFL, fcntl(socketpair_fd[0], F_GETFL, 0) | O_NONBLOCK) < 0)
+				perror("fcntl");
+		if (fcntl(socketpair_fd[1], F_SETFL, fcntl(socketpair_fd[1], F_GETFL, 0) | O_NONBLOCK) < 0)
+				perror("fcntl");
+		dbgprintf("Socketpair 1 %d and 2 %d \n",socketpair_fd[0],socketpair_fd[1]);
 }
 #endif
 
@@ -411,24 +417,39 @@ void select_loop(int listenfd)
 {
 
 	/* Common vars */
-
+	char sp_buffer[2];
 	int nbytes;
 
 	char remote_ip[INET6_ADDRSTRLEN];
 
-	int fd;
+	int fd,fdmax;
 	int done = 0;
-	FdData fdDataList[MAX_FD_SIZE];
 
+#ifndef NOPE_MAX_CON_CONS
+	FdData fdDataList[MAX_NO_FDS];
+#else
+	FdData * fdDataList;
+	LOG_ERROR_ON_NULL(fdDataList =  malloc(sizeof(fdDataList)*MAX_NO_FDS),"Can't malloc() on fdDataList");
+#endif
+
+    struct timeval tv;
+    int poll_timeout = POLL_TIMEOUT;
+    tv.tv_sec = poll_timeout/1000;
+    tv.tv_usec = 0;
+
+	/* keep track of the biggest file descriptor */
+	fdmax = listenfd;           /* so far, it's this one */
+
+	for (fd = 0; fd < fdmax; fd++) {
+		fdDataList[fd].state = STATE_PRE_REQUEST;
+	}
 #ifdef NOPE_EPOLL
-	/* Epoll */
 
 	int eventfd;
 	struct epoll_event event;
 	struct epoll_event *events;
 
 	eventfd = epoll_create(1234);       /*Number is ignored */
-	/* printf("Epoll Created %d\n",eventfd); */
 
 	if (eventfd == -1) {
 		perror("epoll_create");
@@ -443,15 +464,28 @@ void select_loop(int listenfd)
 		return;
 	}
 
-	events = calloc(MAX_EVENTS, sizeof event);
+#ifdef NOPE_THREADS
+	/* Socket Pair */
+	event.data.fd = socketpair_fd[1];
+	event.events = EPOLLIN | EPOLLET;
 
+	if (epoll_ctl(eventfd, EPOLL_CTL_ADD, socketpair_fd[1], &event)) {
+		perror("epoll_ctl_socketpair");
+		return;
+	}
+#endif
+
+	events = calloc(MAX_EVENTS, sizeof event);
 	/* Epoll main loop */
 	while (1) {
+
 #ifdef NOPE_THREADS
 		cleaner_thread ();	/*Run the thread clearer */
 #endif
 		int n, e;
-		n = epoll_wait(eventfd, events, MAX_EVENTS, -1);
+		dbgprintf(KCYN "Waiting for events \n" KNRM);
+		n = epoll_wait(eventfd, events, MAX_EVENTS, poll_timeout);
+		dbgprintf(KCYN "Detected %d events \n" KNRM,n);
 		for (e = 0; e < n; e++) {
 			if ((events[e].events & EPOLLERR) ||
 					(events[e].events & EPOLLHUP) || (!(events[e].events & EPOLLIN))) {
@@ -468,7 +502,11 @@ void select_loop(int listenfd)
                 	   char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
 
                 	   in_len = sizeof in_addr;
+
+
                 	   newfd = accept(listenfd, &in_addr, &in_len);
+
+
                 	   if (newfd == -1) {
                 		   if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
                 			   /* We have processed all incoming  connections. */
@@ -477,7 +515,12 @@ void select_loop(int listenfd)
                 			   perror("accept");
                 			   break;
                 		   }
+                	   } else if (newfd==MAX_NO_FDS) {
+                		   /* Process some events before accepting more */
+                		   fprintf(stderr,"Reached MAX_NO_FDS at %d\n",newfd);
+                		   break;
                 	   }
+
 
                 	   if (getnameinfo(&in_addr, in_len,
                 			   hbuf, sizeof hbuf,
@@ -505,16 +548,29 @@ void select_loop(int listenfd)
                 	   }
                    }
                    continue;
-			} else {
+			}
+#ifdef 	NOPE_THREADS
+			else if (socketpair_fd[1] == events[e].data.fd) {
+				nbytes = read(events[e].data.fd, sp_buffer,1);
+				dbgprintf(KCYN "SocketPair Read %d : %d\n" KCYN,events[e].data.fd,nbytes);
+				if (nbytes == -1) {
+					if (errno != EAGAIN) { /* EAGAINs we have read all data */
+						perror("read");
+					}
+				}
+			}
+#endif
+			else {
+				fd = events[e].data.fd;
 				while (1) {
-					fd = events[e].data.fd;
 					nbytes =
 							read(fd, fdDataList[fd].readBuffer + fdDataList[fd].readBufferIdx,
 									MAX_REQUEST_SIZE - fdDataList[fd].readBufferLen);
+					dbgprintf(KCYN "Read %d : %d\n" KCYN,fd,nbytes);
 					if (nbytes == -1) {
 						if (errno != EAGAIN) { /* EAGAINs we have read all data */
 							perror("read");
-							done = 1;
+							done = true;
 						}
 						break;
 					} else if (nbytes == 0) {
@@ -541,20 +597,12 @@ void select_loop(int listenfd)
 	 * Thank you Brian "Beej Jorgensen" Hall */
 	fd_set master;              // pMaster file descriptor list
 	fd_set read_fds;            // temp file descriptor list for select()
-	int fdmax;                  // maximum file descriptor number
 
 	FD_ZERO(&master);           /* clear the pMaster and temp sets */
 	FD_ZERO(&read_fds);
 
 	/* add the listener to the master set */
 	FD_SET(listenfd, &master);
-
-	/* keep track of the biggest file descriptor */
-	fdmax = listenfd;           /* so far, it's this one */
-
-	for (fd = 0; fd < fdmax; fd++) {
-		fdDataList[fd].state = STATE_PRE_REQUEST;
-	}
 
 	/* Select main loop */
 	while (1) {
@@ -565,12 +613,8 @@ void select_loop(int listenfd)
 
 		read_fds = master;      /* copy it */
 
-	    struct timeval tv;
-	    tv.tv_sec = 1;
-	    tv.tv_usec = 0;
-
 		dbgprintf(KRED "Select blocking\n" KNRM);
-		if (select(fdmax + 1, &read_fds, NULL, NULL, &tv) == -1) {
+		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1) {
 			perror("select");
 			exit(4);
 		}
@@ -605,13 +649,26 @@ void select_loop(int listenfd)
 
 #ifdef NOPE_THREADS
 
+void notify_parent()
+{
+	 dbgprintf("Notifying parent\n");
+
+	 int written=write(socketpair_fd[0], "C", 1);
+	 if (written==-1) {
+		if (errno != EAGAIN) { /* EAGAINs we have read all data */
+			perror("notify_parent_write");
+		}
+	 }
+	 dbgprintf("Wrote socketpair %d : %d\n",socketpair_fd[0],written);
+}
+
 void farmer_thread (THREAD_DATA td)
 {
 	dbgprintf(KYEL "farmer: Gonna get the the mutex for %d\n" KYEL,td.fd);
 	pthread_mutex_lock (fifo->mut);
 	dbgprintf(KYEL "farmer: Got the the mutex %d\n" KYEL,td.fd);
 	while (fifo->full) {
-		printf ("producer: queue FULL.\n");
+		printf (KRED "producer: queue FULL.\n" KNRM);
 		pthread_cond_wait (fifo->notFull, fifo->mut);
 	}
 	queueAdd (fifo, td);
@@ -619,7 +676,7 @@ void farmer_thread (THREAD_DATA td)
 	pthread_cond_signal (fifo->notEmpty);
 }
 
-void cleaner_thread ()
+void cleaner_thread (void)
 {
 	THREAD_DATA td;
 	dbgprintf(KMAG "cleaner: Gonna get the the mutex\n" KNRM);
@@ -629,15 +686,18 @@ void cleaner_thread ()
 		dbgprintf (KMAG "cleaner: queue EMPTY.\n" KNRM);
 		pthread_mutex_unlock (cleaner_fifo->mut);
 	} else {
-		queueDel (cleaner_fifo, &td);
-		dbgprintf(KMAG "cleaner: cleaning %d\n" KNRM,td.fd);
+		while (!cleaner_fifo->empty) {
+			queueDel (cleaner_fifo, &td);
+			dbgprintf(KMAG "cleaner: cleaning %d\n" KNRM,td.fd);
+			clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
+		}
+		dbgprintf (KMAG "cleaner: NOW queue EMPTY.\n" KNRM);
 		pthread_mutex_unlock (cleaner_fifo->mut);
 		pthread_cond_signal (cleaner_fifo->notFull);
-		clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
 	}
 }
 
-void *worker_thread (void)
+void *worker_thread (void *arg)
 {
 	THREAD_DATA td;
 	struct timespec tim, tim2;
@@ -667,10 +727,13 @@ void *worker_thread (void)
 		queueAdd (cleaner_fifo, td);
 		pthread_mutex_unlock (cleaner_fifo->mut);
 		pthread_cond_signal (cleaner_fifo->notEmpty);
+		//notify_parent();
 
-		tim.tv_sec = 0;									/* Sleep for a bit */
+		/*
+		tim.tv_sec = 0;
 		tim.tv_nsec = 1000;
 		nanosleep(&tim , &tim2);
+		*/
 	}
 }
 
@@ -736,7 +799,7 @@ void queueDel (queue *q, THREAD_DATA *out)
 
 int main(void)
 {
-	int default_port = DEFAULT_PORT;
+	default_port = DEFAULT_PORT;
 
 	int listenfd;
 
@@ -758,8 +821,8 @@ int main(void)
 #ifdef NOPE_THREADS
 	struct rlimit limit;
 
-	limit.rlim_cur = NOPE_THREADS*64;
-	limit.rlim_max = NOPE_THREADS*64;
+	limit.rlim_cur = MAX_NO_FDS*8;
+	limit.rlim_max = MAX_NO_FDS*8;
 
 	setrlimit(RLIMIT_NOFILE, &limit);
 

@@ -199,7 +199,7 @@ void sendHeadersTypeEncoding(Request request, const char *type, const char *enco
 /* Deprecated */
 void writeStandardHeaders(int client)
 {
-    STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+    STATIC_SEND(client, "HTTP/1.1 200 OK\r\n", 0);
     STATIC_SEND(client, SERVER_STRING, 0);
     STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
     STATIC_SEND(client, "Vary: Accept-Encoding\r\n", 0);
