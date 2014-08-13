@@ -1,6 +1,35 @@
 #ifndef NOPE_H_
 #define NOPE_H_
 
+#include <arpa/inet.h>          /* inet_ntoa */
+#include <signal.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <time.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef NOPE_EPOLL
+#include <sys/epoll.h>
+#else
+#include <sys/select.h>
+#endif
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <netdb.h>
+#ifdef NOPE_THREADS
+#include <sys/resource.h>
+#include <pthread.h>
+#endif
+
 /* Colors. Why not ? */
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -32,8 +61,8 @@ typedef int bool;
 #else
 #define MAX_NO_FDS 1024
 #endif
-#define MAX_METHOD_SIZE 64
-#define MAX_VER_SIZE 64
+#define MAX_METHOD_SIZE 32
+#define MAX_VER_SIZE 32
 #define MAX_REQUEST_SIZE 8192
 #define MAX_EVENTS MAX_NO_FDS/2
 #define POLL_TIMEOUT 1000 /*1 second */
@@ -82,6 +111,7 @@ typedef struct {
 #define LOG_ERROR_ON(_statement_,_condition_,_message_) do { if ((_statement_)==_condition_) fprintf(stderr,_message_); } while(0)
 #define LOG_ERROR_ON_NULL(_statement_,_message_) LOG_ERROR_ON(_statement_,NULL,_message_)
 #define NEW(T,v) do { T * v =  malloc(sizeof(T)); } while (0)
+#define NOPE_STR(X) #X
 /* Globals */
 int default_port;
 
@@ -98,7 +128,11 @@ typedef struct {
 } THREAD_DATA;
 
 typedef struct {
+#ifdef NOPE_MAX_CON_CONS
+	THREAD_DATA *buf;
+#else
 	THREAD_DATA buf[QUEUESIZE];
+#endif
 	long head, tail;
 	int full, empty;
 	pthread_mutex_t *mut;

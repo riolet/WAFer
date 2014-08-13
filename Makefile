@@ -5,7 +5,11 @@ ifdef THREADS
 endif
 
 ifdef DEBUG
-	DEBUG_OPT=-D NOPE_DEBUG -ggdb
+	ifeq ($(DEBUG),0) 
+		DEBUG_OPT=-ggdb
+	else
+		DEBUG_OPT=-D NOPE_DEBUG -ggdb
+	endif
 endif
 
 ifdef PROCESSES
@@ -18,7 +22,11 @@ ifdef LOOP
 	endif	
 endif
 
-EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT)
+ifdef MAX_CON_CONS
+	MAX_CON_CONS_OPT=-D NOPE_MAX_CON_CONS=$(MAX_CON_CONS)
+endif
+
+EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT) $(MAX_CON_CONS_OPT)
 
 CC=gcc
 AR=ar
@@ -31,7 +39,7 @@ all: $(MODULES)
 
 # rule to build modules
 %: %.c $(LIBNOPE)
-	$(CC) $(EXT_OPTIONS) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^
 
 $(LIBNOPE): $(LIBNOPE_OBJ)
 	$(AR) r $@ $^

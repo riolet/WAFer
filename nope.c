@@ -2,34 +2,6 @@
  * Please visit nopedotc.com for more information
  */
 
-#include <arpa/inet.h>          /* inet_ntoa */
-#include <signal.h>
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <time.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#ifdef NOPE_EPOLL
-#include <sys/epoll.h>
-#else
-#include <sys/select.h>
-#endif
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <netdb.h>
-#ifdef NOPE_THREADS
-#include <sys/resource.h>
-#include <pthread.h>
-#endif
 
 #include "nope.h"
 
@@ -61,11 +33,11 @@
 void new_fd_data(FdData * fd)
 {
 	fd->state = STATE_PRE_REQUEST;
-	fd->readBuffer = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR);
-	fd->method = malloc((MAX_METHOD_SIZE + 1) * SIZE_OF_CHAR);
-	fd->uri = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR);
-	fd->ver = malloc((MAX_VER_SIZE + 1) * SIZE_OF_CHAR);
-	fd->headers = malloc(MAX_HEADERS * sizeof(char *));
+	LOG_ERROR_ON_NULL(fd->readBuffer = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR), "Can't malloc " NOPE_STR(__LINE__) );
+	LOG_ERROR_ON_NULL(fd->method = malloc((MAX_METHOD_SIZE + 1) * SIZE_OF_CHAR), "Can't malloc " NOPE_STR(__LINE__));
+	LOG_ERROR_ON_NULL(fd->uri = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR)," Can't malloc " NOPE_STR(__LINE__));
+	LOG_ERROR_ON_NULL(fd->ver = malloc((MAX_VER_SIZE + 1) * SIZE_OF_CHAR)," Can't malloc " NOPE_STR(__LINE__));
+	LOG_ERROR_ON_NULL(fd->headers = malloc(MAX_HEADERS * sizeof(char *))," Can't malloc " NOPE_STR(__LINE__));
 	fd->readBufferIdx = 0;
 	fd->readBufferLen = 0;
 	fd->readBufferIdx = 0;
@@ -417,7 +389,8 @@ void select_loop(int listenfd)
 {
 
 	/* Common vars */
-	char sp_buffer[2];
+
+	char socket_pair_buffer[2];
 	int nbytes;
 
 	char remote_ip[INET6_ADDRSTRLEN];
@@ -429,7 +402,7 @@ void select_loop(int listenfd)
 	FdData fdDataList[MAX_NO_FDS];
 #else
 	FdData * fdDataList;
-	LOG_ERROR_ON_NULL(fdDataList =  malloc(sizeof(fdDataList)*MAX_NO_FDS),"Can't malloc() on fdDataList");
+	LOG_ERROR_ON_NULL(fdDataList =  malloc(sizeof(FdData)*MAX_NO_FDS),"Can't malloc() on fdDataList");
 #endif
 
     struct timeval tv;
@@ -515,7 +488,7 @@ void select_loop(int listenfd)
                 			   perror("accept");
                 			   break;
                 		   }
-                	   } else if (newfd==MAX_NO_FDS) {
+                	   } else if (newfd>=MAX_NO_FDS) {
                 		   /* Process some events before accepting more */
                 		   fprintf(stderr,"Reached MAX_NO_FDS at %d\n",newfd);
                 		   break;
@@ -551,7 +524,7 @@ void select_loop(int listenfd)
 			}
 #ifdef 	NOPE_THREADS
 			else if (socketpair_fd[1] == events[e].data.fd) {
-				nbytes = read(events[e].data.fd, sp_buffer,1);
+				nbytes = read(events[e].data.fd, socket_pair_buffer,1);
 				dbgprintf(KCYN "SocketPair Read %d : %d\n" KCYN,events[e].data.fd,nbytes);
 				if (nbytes == -1) {
 					if (errno != EAGAIN) { /* EAGAINs we have read all data */
@@ -577,18 +550,15 @@ void select_loop(int listenfd)
 						done = true;
 						break;
 					}
-					done = state_machine(fdDataList, fd, nbytes,NULL);
-					if (done) {
+					if ((done = state_machine(fdDataList, fd, nbytes,NULL))) {
 						break;
 					}
 				}
 
 				if (done) {
-					if (fdDataList[fd].state != STATE_PRE_REQUEST)
-						free_fd_data(&fdDataList[fd]);
-					fdDataList[fd].state = STATE_PRE_REQUEST;
-					close(fd);
+					clear_connection_baggage(fdDataList, fd, NULL);
 				}
+
 			}
 		}
 	}
@@ -748,6 +718,10 @@ queue *queueInit (void)
 	q->full = 0;
 	q->head = 0;
 	q->tail = 0;
+
+#ifdef NOPE_MAX_CON_CONS
+	q->buf = malloc (sizeof(THREAD_DATA)*MAX_NO_FDS);
+#endif
 	q->mut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
 	pthread_mutex_init (q->mut, NULL);
 	q->notFull = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
@@ -760,6 +734,9 @@ queue *queueInit (void)
 
 void queueDelete (queue *q)
 {
+#ifdef NOPE_MAX_CON_CONS
+	free(q->buf);
+#endif
 	pthread_mutex_destroy (q->mut);
 	free (q->mut);
 	pthread_cond_destroy (q->notFull);
@@ -821,8 +798,8 @@ int main(void)
 #ifdef NOPE_THREADS
 	struct rlimit limit;
 
-	limit.rlim_cur = MAX_NO_FDS*8;
-	limit.rlim_max = MAX_NO_FDS*8;
+	limit.rlim_cur = MAX_NO_FDS*4;
+	limit.rlim_max = MAX_NO_FDS*4;
 
 	setrlimit(RLIMIT_NOFILE, &limit);
 
