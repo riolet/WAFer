@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/riolet/nope.c.svg?branch=master)](https://travis-ci.org/riolet/nope.c)
+
 #nope.c
 
 nope.c is a C language-based ultra-light software platform for scalable server-side and networking applications. Think node.js for C programmers.
