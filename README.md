@@ -6,7 +6,7 @@ Just put your code inside the function void server(int client, const char * quer
 
 Default port is 4242. Set environment variable 'PORT' to change it.
 
-That's really it. The source comes with a simple example that prints "Hello World" to get your started.
+That's really it. The source comes with a simple example that prints "Hello World" to get you started.
 
 ###Concurrency Handling
 
@@ -16,7 +16,7 @@ You can choose between:
 
 2. Single process with non-blocking IO with epoll()  (Define EPOLL when compiling)
 
-3. Multiple fork()ed processeses with blocking IO (Set CHILDREN environmment variable to greater than zero)
+3. Multiple fork()ed processeses with blocking IO (Set CHILDREN environment variable to greater than zero)
 
 ###Note to Contributors
 

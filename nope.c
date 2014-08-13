@@ -32,6 +32,7 @@
 
 void new_fd_data(FdData * fd)
 {
+<<<<<<< HEAD
 	fd->state = STATE_PRE_REQUEST;
 	LOG_ERROR_ON_NULL(fd->readBuffer = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR), "Can't malloc " NOPE_STR(__LINE__) );
 	LOG_ERROR_ON_NULL(fd->method = malloc((MAX_METHOD_SIZE + 1) * SIZE_OF_CHAR), "Can't malloc " NOPE_STR(__LINE__));
@@ -40,17 +41,33 @@ void new_fd_data(FdData * fd)
 	LOG_ERROR_ON_NULL(fd->headers = malloc(MAX_HEADERS * sizeof(char *))," Can't malloc " NOPE_STR(__LINE__));
 	fd->readBufferIdx = 0;
 	fd->readBufferLen = 0;
-	fd->readBufferIdx = 0;
 	fd->methodIdx = 0;
 	fd->uriIdx = 0;
 	fd->verIdx = 0;
 	fd->headersIdx = 0;
 	fd->headers[fd->headersIdx] = NULL;
 	fd->withinHeaderIdx = 0;
+=======
+    fd->state = STATE_PRE_REQUEST;
+    fd->readBuffer = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR);
+    fd->method = malloc((MAX_METHOD_SIZE + 1) * SIZE_OF_CHAR);
+    fd->uri = malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR);
+    fd->ver = malloc((MAX_VER_SIZE + 1) * SIZE_OF_CHAR);
+    fd->headers = malloc(MAX_HEADERS * sizeof(char *));
+    fd->readBufferIdx = 0;
+    fd->readBufferLen = 0;
+    fd->methodIdx = 0;
+    fd->uriIdx = 0;
+    fd->verIdx = 0;
+    fd->headersIdx = 0;
+    fd->headers[fd->headersIdx] = NULL;
+    fd->withinHeaderIdx = 0;
+>>>>>>> master
 }
 
 void free_fd_data(FdData * fd)
 {
+<<<<<<< HEAD
 	free(fd->readBuffer);
 	free(fd->method);
 	free(fd->uri);
@@ -58,12 +75,25 @@ void free_fd_data(FdData * fd)
 	free(fd->ver);
 	fd->readBufferIdx = 0;
 	fd->readBufferLen = 0;
-	fd->readBufferIdx = 0;
 	fd->methodIdx = 0;
 	fd->uriIdx = 0;
 	fd->verIdx = 0;
 	fd->headersIdx = 0;
 	fd->withinHeaderIdx = 0;
+=======
+    free(fd->readBuffer);
+    free(fd->method);
+    free(fd->uri);
+    freeHeaders(fd->headers);
+    free(fd->ver);
+    fd->readBufferIdx = 0;
+    fd->readBufferLen = 0;
+    fd->methodIdx = 0;
+    fd->uriIdx = 0;
+    fd->verIdx = 0;
+    fd->headersIdx = 0;
+    fd->withinHeaderIdx = 0;
+>>>>>>> master
 }
 
 /* Free thy mallocs */
