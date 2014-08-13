@@ -7,9 +7,14 @@ nope.c is a C language-based ultra-light software platform for scalable server-s
 Just put your code inside the function `void server(Request request)` in `server.c` and you are good to go.
 
 nope.c can operate in many different configurations, all selected at compile time. They include:
+
+
 1. Single-threaded (Default) or multi-threaded (make with `THREADS=n` where n>0)
+
 2. Select(Default) or epoll (make with `LOOP=epoll`) based event loop
+
 3. C10K mode (make with `LOOP=epoll MAX_CON_CONS=n` where n>10,000)
+
 
 Default port is 4242. Set environment variable 'PORT' to change it.
 
