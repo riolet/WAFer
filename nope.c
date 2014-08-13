@@ -336,10 +336,13 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 
 	Request request;
 	if (fdDataList[i].state == STATE_COMPLETE_READING) {
+
 		request.client = i;
 		request.reqStr = fdDataList[i].uri;
 		request.method = fdDataList[i].method;
+		request.ver = fdDataList[i].ver;
 		request.headers = fdDataList[i].headers;
+
 #ifdef NOPE_THREADS
 			THREAD_DATA td;
 			td.fd=i;
@@ -362,7 +365,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 void initialize_threads()
 {
 
-		pthread_t *con=malloc(sizeof(pthread_t*)*(NOPE_THREADS+1));
+		pthread_t con;
 
 		LOG_ERROR_ON_NULL(fifo = queueInit (),"main: Clean queue Init failed.\n");
 
@@ -373,8 +376,8 @@ void initialize_threads()
 		fd_mutex=(pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
 		pthread_mutex_init (fd_mutex, NULL);
 		for (i=0;i<NOPE_THREADS;i++) {
-			pthread_create (con, NULL, &worker_thread, fifo);
-			con+=sizeof(pthread_t*);
+			pthread_create (&con, NULL, &worker_thread, fifo);
+			//con+=sizeof(pthread_t);
 		}
 		socketpair(AF_UNIX, SOCK_STREAM, 0, socketpair_fd);
 		if (fcntl(socketpair_fd[0], F_SETFL, fcntl(socketpair_fd[0], F_GETFL, 0) | O_NONBLOCK) < 0)
@@ -407,8 +410,8 @@ void select_loop(int listenfd)
 
     struct timeval tv;
     int poll_timeout = POLL_TIMEOUT;
-    tv.tv_sec = poll_timeout/1000;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = POLL_TIMEOUT*1000;
 
 	/* keep track of the biggest file descriptor */
 	fdmax = listenfd;           /* so far, it's this one */
@@ -500,8 +503,8 @@ void select_loop(int listenfd)
                 			   sbuf, sizeof sbuf,
                 			   NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
 
-                		   dbgprintf("accept()ed connection on  %d (host=%s, port=%s)\n",
-                				   newfd, hbuf, sbuf);
+                		   /*dbgprintf("accept()ed connection on  %d (host=%s, port=%s)\n",
+                				   newfd, hbuf, sbuf);*/
 
                 		   fdDataList[newfd].state = STATE_PRE_REQUEST;
                 		   new_fd_data(&fdDataList[newfd]);

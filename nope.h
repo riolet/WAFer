@@ -65,7 +65,7 @@ typedef int bool;
 #define MAX_VER_SIZE 32
 #define MAX_REQUEST_SIZE 8192
 #define MAX_EVENTS MAX_NO_FDS/2
-#define POLL_TIMEOUT 1000 /*1 second */
+#define POLL_TIMEOUT 100 /* ms */
 /* Define HTTP request parsing states */
 #define STATE_PRE_REQUEST 0
 #define STATE_METHOD 1
@@ -80,6 +80,7 @@ typedef struct struct_request {
     int client;
     char *reqStr;
     char *method;
+    char *ver;
     char **headers;
 } Request;
 

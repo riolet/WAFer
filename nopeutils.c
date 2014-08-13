@@ -20,6 +20,48 @@
 #include "nopeutils.h"
 #include "nope.h"
 
+/* Ver 0.0.5 Functions */
+/* This is like dprintf on post 2008 POSIX
+ * You can use FDPRINTF which might use dprintf if it is available
+ * Parameters: the client, format
+ * Returns: the number of characters printed
+ */
+long resprintf(Request request, const char *format, ...)
+{
+    /* initial buffer large enough for most cases, will resize if required */
+    char *buf = malloc(MAX_BUFFER_SIZE);
+    int len;
+
+    va_list arg;
+    long done;
+    va_start(arg, format);
+    len = vsnprintf(buf, MAX_BUFFER_SIZE, format, arg);
+    va_end(arg);
+
+    if (len > MAX_BUFFER_SIZE) {
+        /* buffer size was not enough */
+        free(buf);
+        buf = malloc(len + 1);
+        if (buf == NULL) {
+            printf("Could not allocate memory.");
+            exit(EXIT_FAILURE);
+        }
+        va_start(arg, format);
+        vsnprintf(buf, len + 1, format, arg);
+        va_end(arg);
+    }
+
+    /* printf("Buffer length %d",strlen(buf)); */
+    if (len < MAX_BUFFER_SIZE) {
+        done = (int)send(request.client, buf, len, 0);
+    } else {
+        done = writeLongString(request.client, buf, len);
+    }
+
+    free(buf);
+    return done;
+}
+
 /* String functions */
 bool stringEqualsLitLen(const char *varStr, const char *litStr, int litStrLen)
 {
