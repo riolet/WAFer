@@ -4,21 +4,16 @@
 
 nope.c is a C language-based ultra-light software platform for scalable server-side and networking applications. Think node.js for C programmers.
 
-Just put your code inside the function void server(int client, const char * queryString, const char * method) in server.c and you are good to go.
+Just put your code inside the function `void server(Request request)` in `server.c` and you are good to go.
+
+nope.c can operate in many different configurations, all selected at compile time. They include:
+1. Single-threaded (Default) or multi-threaded (make with `THREADS=n` where n>0)
+2. Select(Default) or epoll (make with `LOOP=epoll`) based event loop
+3. C10K mode (make with `LOOP=epoll MAX_CON_CONS=n` where n>10,000)
 
 Default port is 4242. Set environment variable 'PORT' to change it.
 
-That's really it. The source comes with a simple example that prints "Hello World" to get you started.
-
-###Concurrency Handling
-
-You can choose between:
-
-1. Single process with non-blocking IO with select() (Default)
-
-2. Single process with non-blocking IO with epoll()  (Define EPOLL when compiling)
-
-3. Multiple fork()ed processeses with blocking IO (Set CHILDREN environment variable to greater than zero)
+That's really it. The source comes with a simple example `factor.c` to get you started.
 
 ###Note to Contributors
 
