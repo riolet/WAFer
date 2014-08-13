@@ -20,6 +20,48 @@
 #include "nopeutils.h"
 #include "nope.h"
 
+/* Ver 0.0.5 Functions */
+/* This is like dprintf on post 2008 POSIX
+ * You can use FDPRINTF which might use dprintf if it is available
+ * Parameters: the client, format
+ * Returns: the number of characters printed
+ */
+long resprintf(Request request, const char *format, ...)
+{
+    /* initial buffer large enough for most cases, will resize if required */
+    char *buf = malloc(MAX_BUFFER_SIZE);
+    int len;
+
+    va_list arg;
+    long done;
+    va_start(arg, format);
+    len = vsnprintf(buf, MAX_BUFFER_SIZE, format, arg);
+    va_end(arg);
+
+    if (len > MAX_BUFFER_SIZE) {
+        /* buffer size was not enough */
+        free(buf);
+        buf = malloc(len + 1);
+        if (buf == NULL) {
+            printf("Could not allocate memory.");
+            exit(EXIT_FAILURE);
+        }
+        va_start(arg, format);
+        vsnprintf(buf, len + 1, format, arg);
+        va_end(arg);
+    }
+
+    /* printf("Buffer length %d",strlen(buf)); */
+    if (len < MAX_BUFFER_SIZE) {
+        done = (int)send(request.client, buf, len, 0);
+    } else {
+        done = writeLongString(request.client, buf, len);
+    }
+
+    free(buf);
+    return done;
+}
+
 /* String functions */
 bool stringEqualsLitLen(const char *varStr, const char *litStr, int litStrLen)
 {
@@ -154,6 +196,10 @@ char *getHeader(char **headers, char *header)
     char *current_header, *matching_header, *value;
     // Not sure if MAX_BUFFER_SIZE is right.
     char *retval = malloc(MAX_BUFFER_SIZE * sizeof(char));
+    if (retval == NULL) {
+        printf("Could not allocate memory.");
+        exit(EXIT_FAILURE);
+    }
     int i;
     for (i = 0; headers[i] != NULL; i++) {
         current_header = headers[i];
@@ -195,7 +241,7 @@ void sendHeadersTypeEncoding(Request request, const char *type, const char *enco
 /* Deprecated */
 void writeStandardHeaders(int client)
 {
-    STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+    STATIC_SEND(client, "HTTP/1.1 200 OK\r\n", 0);
     STATIC_SEND(client, SERVER_STRING, 0);
     STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
     STATIC_SEND(client, "Vary: Accept-Encoding\r\n", 0);
