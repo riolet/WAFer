@@ -41,7 +41,6 @@
 #define KWHT  "\x1B[37m"
 #define RESET   "\033[0m"
 
-
 /* Define boolean */
 typedef int bool;
 #define true 1
@@ -65,7 +64,7 @@ typedef int bool;
 #define MAX_VER_SIZE 32
 #define MAX_REQUEST_SIZE 8192
 #define MAX_EVENTS MAX_NO_FDS/2
-#define POLL_TIMEOUT 100 /* ms */
+#define POLL_TIMEOUT 100        /* ms */
 /* Define HTTP request parsing states */
 #define STATE_PRE_REQUEST 0
 #define STATE_METHOD 1
@@ -85,19 +84,19 @@ typedef struct struct_request {
 } Request;
 
 typedef struct {
-	short int state;
-	char *readBuffer;
-	short readBufferIdx;
-	short readBufferLen;
-	char *method;
-	short methodIdx;
-	char *uri;
-	short uriIdx;
-	char *ver;
-	short verIdx;
-	char **headers;
-	short headersIdx;
-	short withinHeaderIdx;
+    short int state;
+    char *readBuffer;
+    short readBufferIdx;
+    short readBufferLen;
+    char *method;
+    short methodIdx;
+    char *uri;
+    short uriIdx;
+    char *ver;
+    short verIdx;
+    char **headers;
+    short headersIdx;
+    short withinHeaderIdx;
 } FdData;
 
 #define LISTENQ  1024           /* second argument to listen() */
@@ -122,39 +121,39 @@ int default_port;
 
 /* select_loop stuff */
 typedef struct {
-	Request request;
-	int fd;
-	FdData *fdDataList;
-	fd_set *pMaster;
+    Request request;
+    int fd;
+    FdData *fdDataList;
+    fd_set *pMaster;
 } THREAD_DATA;
 
 typedef struct {
 #ifdef NOPE_MAX_CON_CONS
-	THREAD_DATA *buf;
+    THREAD_DATA *buf;
 #else
-	THREAD_DATA buf[QUEUESIZE];
+    THREAD_DATA buf[QUEUESIZE];
 #endif
-	long head, tail;
-	int full, empty;
-	pthread_mutex_t *mut;
-	pthread_cond_t *notFull, *notEmpty;
+    long head, tail;
+    int full, empty;
+    pthread_mutex_t *mut;
+    pthread_cond_t *notFull, *notEmpty;
 } queue;
 
 pthread_mutex_t *fd_mutex;
 
 /*Globals*/
-queue * fifo;
-queue * cleaner_fifo;
+queue *fifo;
+queue *cleaner_fifo;
 int socketpair_fd[2];
 
 /*Functions*/
-void farmer_thread (THREAD_DATA);
-void *worker_thread (void *arg);
-void cleaner_thread (void);
-queue *queueInit (void);
-void queueDelete (queue *q);
-void queueAdd (queue *q, THREAD_DATA in);
-void queueDel (queue *q, THREAD_DATA *out);
+void farmer_thread(THREAD_DATA);
+void *worker_thread(void *arg);
+void cleaner_thread(void);
+queue *queueInit(void);
+void queueDelete(queue * q);
+void queueAdd(queue * q, THREAD_DATA in);
+void queueDel(queue * q, THREAD_DATA * out);
 #endif
 
 void freeHeaders(char **);

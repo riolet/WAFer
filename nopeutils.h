@@ -74,7 +74,8 @@ char *getQueryParam(const char *, const char *);
 void writeStandardHeaders(int);
 ssize_t writeLongString(int, const char *, size_t);
 void serveFile(int, const char *, const char *);
-void serveDownloadableFile(int client, const char *filename, const char *displayFilename, const char *type);
+void serveDownloadableFile(int client, const char *filename, const char *displayFilename,
+                           const char *type);
 char *dupstr(const char *);
 
 void unimplemented(int client);
