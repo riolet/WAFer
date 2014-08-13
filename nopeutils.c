@@ -154,6 +154,10 @@ char *getHeader(char **headers, char *header)
     char *current_header, *matching_header, *value;
     // Not sure if MAX_BUFFER_SIZE is right.
     char *retval = malloc(MAX_BUFFER_SIZE * sizeof(char));
+    if (retval == NULL) {
+        printf("Could not allocate memory.");
+        exit(EXIT_FAILURE);
+    }
     int i;
     for (i = 0; headers[i] != NULL; i++) {
         current_header = headers[i];
@@ -195,7 +199,7 @@ void sendHeadersTypeEncoding(Request request, const char *type, const char *enco
 /* Deprecated */
 void writeStandardHeaders(int client)
 {
-    STATIC_SEND(client, "HTTP/1.0 200 OK\r\n", 0);
+    STATIC_SEND(client, "HTTP/1.1 200 OK\r\n", 0);
     STATIC_SEND(client, SERVER_STRING, 0);
     STATIC_SEND(client, "Content-Type: text/html\r\n", 0);
     STATIC_SEND(client, "Vary: Accept-Encoding\r\n", 0);
