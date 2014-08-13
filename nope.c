@@ -29,6 +29,9 @@
 	idx++;\
 		}
 
+#define FCNTL_ADD(s, fl) fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | fl)
+#define FCNTL_NONBLOCK(s) FCNTL_ADD(s, O_NONBLOCK)
+
 void new_fd_data(FdData * fd)
 {
     fd->state = STATE_PRE_REQUEST;
@@ -387,12 +390,8 @@ void initialize_threads()
         //con+=sizeof(pthread_t);
     }
     socketpair(AF_UNIX, SOCK_STREAM, 0, socketpair_fd);
-    if (fcntl(socketpair_fd[0], F_SETFL, fcntl(socketpair_fd[0], F_GETFL, 0) | O_NONBLOCK)
-        < 0)
-        perror("fcntl");
-    if (fcntl(socketpair_fd[1], F_SETFL, fcntl(socketpair_fd[1], F_GETFL, 0) | O_NONBLOCK)
-        < 0)
-        perror("fcntl");
+    if (FCNTL_NONBLOCK(socketpair_fd[0]) < 0) perror("fcntl");
+    if (FCNTL_NONBLOCK(socketpair_fd[1]) < 0) perror("fcntl");
     dbgprintf("Socketpair 1 %d and 2 %d \n", socketpair_fd[0], socketpair_fd[1]);
 }
 #endif
@@ -518,7 +517,7 @@ void select_loop(int listenfd)
                     }
 
                     /* Make the incoming socket non-blocking and add it to the list of fds to monitor. */
-                    if (fcntl(newfd, F_SETFL, fcntl(newfd, F_GETFL, 0) | O_NONBLOCK) < 0) {
+                    if (FCNTL_NONBLOCK(newfd) < 0) {
                         perror("fcntl");
                         return;
                     }
@@ -836,7 +835,7 @@ int main(void)
         }
     }
 #else                           /* Non-blocking if single processes */
-    if (fcntl(listenfd, F_SETFL, fcntl(listenfd, F_GETFL, 0) | O_NONBLOCK) < 0)
+    if (FCNTL_NONBLOCK(listenfd) < 0)
         perror("fcntl");
 #endif
 
