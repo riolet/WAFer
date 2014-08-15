@@ -1,14 +1,3 @@
-long resPrintf(Request request, const char *format, ...);
-void serveFile(Request request, const char *filename, const char *displayFilename,
-                           const char *type);
-char *getQueryParam(Request request, const char *name);
-char *getQueryPath(Request request);
-void sendHeadersTypeEncoding(Request request, const char *type, const char *encoding);
-void sendResourceNotFound(Request request);
-
-/*Internal stuff follows. Could change in future. Do not use */
-#define STATIC_SEND(_socket, _str) send(_socket, _str, sizeof(_str)-1, 0)
-
 /* ENTL */
 #define STR(X) #X
 #define WSPC " "
@@ -35,4 +24,24 @@ void sendResourceNotFound(Request request);
 #define QIMG(srcurl) STAG(img,src=srcurl)
 #define QIMGA(srcurl) STAG(img,src=srcurl attributes)
 #define QBR ESTAG(br)
+
+#define STAGPARAMQ(tag,attributes) LTA(tag,attributes) ATTR(name,STR(q)) WSPC STR(/) GT /*<tag attributes name="q" /> */
+#define QTAGAPARAMQ(tag,attributes,text) OTAGA(tag,attributes name=STR(q)) text CTAG(tag)       /*<tag attributes> text </tag> */
 /* End ENTL */
+
+long resPrintf(Request request, const char *format, ...);
+void serveFile(Request request, const char *filename, const char *displayFilename,
+                           const char *type);
+
+void sendHeadersTypeEncoding(Request request, const char *type, const char *encoding);
+void sendResourceNotFound(Request request);
+
+char *resQuickForm(Request request, const char *msg, const char *inputstr,bool onlyIfNull);
+#define RES_QUICK_FORM_TEXT(request,msg,onlyIfNull) resQuickForm(request,msg,STAGPARAMQ(input,type="text"),onlyIfNull)
+
+char *getQueryParam(Request request, const char *name);
+char *getQueryPath(Request request);
+bool routeRequest(Request request, const char *path, void (*function) (Request),
+                bool send_headers);
+/*Internal stuff follows. Could change in future. Do not use */
+#define STATIC_SEND(_socket, _str) send(_socket, _str, sizeof(_str)-1, 0)

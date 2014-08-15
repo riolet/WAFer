@@ -6,14 +6,14 @@ static void factor(Request request);
 
 void server(Request request)
 {
-    routeRequest(request, "/factor", &factor,true);
+    routeRequest(request, "/factor", factor,true);
 }
 
 static void factor(Request request)
 {
-    char *nStr = resQuickForm(request, "Number to factor:");
+    char *nStr = RES_QUICK_FORM_TEXT(request, "Number to factor:",false);
 
-    if (strcmp(nStr, UNDEFINED) != 0) {
+    if (nStr != NULL) {
         long n = strtol(nStr, NULL, 10);
         resPrintf(request, "Factors of %li are: ", n);
         long l;

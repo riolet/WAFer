@@ -106,11 +106,11 @@ void sendResourceNotFound(Request request)
 }
 
 /*Input Functions */
-char *resQuickForm(Request request, const char *msg, const char *inputstr)
+char *resQuickForm(Request request, const char *msg, const char *inputstr,bool onlyIfNull)
 {
     char *qpath = getQueryPath(request);
     char *qparam = getQueryParam(request,"q");
-    if (qparam == NULL) {
+    if (!(onlyIfNull&&qparam != NULL)) {
         resPrintf(request, OTAGA(form, action = "%s")
                  "%s%s" STAG(input, type = "submit") CTAG(form), qpath, msg, inputstr);
     }
@@ -195,7 +195,8 @@ char *getQueryParam(Request request, const char *name)
         return value;
     }
 
-    strcpy(value, UNDEFINED);
+    free(value);
+    value=NULL;
     return value;
 }
 
