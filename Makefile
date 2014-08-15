@@ -36,7 +36,7 @@ AR=ar
 CFLAGS=-W -Wall -O2 -Wno-unused-parameter -g $(EXT_OPTIONS)
 LIBNOPE_OBJ=nope.o nopeapi.o
 LIBNOPE=libnope.a
-MODULES=server factor
+MODULES=server example
 
 all: $(MODULES)
 
