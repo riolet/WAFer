@@ -26,12 +26,15 @@ ifdef MAX_CON_CONS
 	MAX_CON_CONS_OPT=-D NOPE_MAX_CON_CONS=$(MAX_CON_CONS)
 endif
 
-EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT) $(MAX_CON_CONS_OPT)
+ifndef CC
+	CC=gcc
+endif
 
-CC=gcc
+EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT) $(MAX_CON_CONS_OPT) 
+
 AR=ar
 CFLAGS=-W -Wall -O2 -Wno-unused-parameter -g $(EXT_OPTIONS)
-LIBNOPE_OBJ=nope.o nopeutils.o
+LIBNOPE_OBJ=nope.o nopeapi.o
 LIBNOPE=libnope.a
 MODULES=server factor
 
@@ -39,13 +42,13 @@ all: $(MODULES)
 
 # rule to build modules
 %: %.c $(LIBNOPE)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(OPTIONS)
 
 $(LIBNOPE): $(LIBNOPE_OBJ)
 	$(AR) r $@ $^
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $< 
 
 clean:
 	rm -f $(LIBNOPE_OBJ)
