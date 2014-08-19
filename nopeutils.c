@@ -439,14 +439,13 @@ bool routef(Request request, const char *path,
 bool routefh(Request request, const char *path,
              void (*function) (int, const char *, const char *))
 {
-    char *queryPath = getQueryPath(request.reqStr);
-    if (strcmp(queryPath, path) == 0) {
-        free(queryPath);
+    const char *q = request.reqStr;
+    while(*path && *q && *path++ == *q++);
+    if (*path == 0) {
         writeStandardHeaders(request.client);
         function(request.client, request.reqStr, request.method);
         return true;
     } else {
-        free(queryPath);
         return false;
     }
 }
