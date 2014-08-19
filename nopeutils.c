@@ -382,16 +382,15 @@ char *_hscan(int client, const char *reqStr, const char *msg, const char *inputs
 bool nope_route(Request request, const char *path, void (*function) (Request),
                 bool send_headers)
 {
-    char *queryPath = getQueryPath(request.reqStr);
-    if (strcmp(queryPath, path) == 0) {
-        free(queryPath);
+    const char *q = request.reqStr;
+    while(*path && *q && *path++ == *q++);
+    if (*path == 0) {
         if (send_headers)
             writeStandardHeaders(request.client);
         if (function != NULL)
             function(request);
         return true;
     } else {
-        free(queryPath);
         return false;
     }
 }
@@ -439,13 +438,14 @@ bool routef(Request request, const char *path,
 bool routefh(Request request, const char *path,
              void (*function) (int, const char *, const char *))
 {
-    const char *q = request.reqStr;
-    while(*path && *q && *path++ == *q++);
-    if (*path == 0) {
+    char *queryPath = getQueryPath(request.reqStr);
+    if (strcmp(queryPath, path) == 0) {
+        free(queryPath);
         writeStandardHeaders(request.client);
         function(request.client, request.reqStr, request.method);
         return true;
     } else {
+        free(queryPath);
         return false;
     }
 }
