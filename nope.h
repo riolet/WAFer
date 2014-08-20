@@ -74,14 +74,22 @@ typedef int bool;
 #define STATE_COMPLETE_READING 5
 
 #define STATUS_HTTP_OK 200
+#define STATUS_HTTP_NOT_FOUND 404
 
 typedef struct struct_request {
-    int client;
     char *reqStr;
     char *method;
     char *ver;
     char **headers;
 } Request;
+
+typedef struct struct_response {
+    int fd;
+    char **headers;
+    int flags;
+    int apiFlags;
+    int status;
+} Response;
 
 typedef struct {
     short int state;
@@ -122,6 +130,7 @@ int default_port;
 /* select_loop stuff */
 typedef struct {
     Request request;
+    Response response;
     int fd;
     FdData *fdDataList;
     fd_set *pMaster;
@@ -159,6 +168,6 @@ void queueDel(queue * q, THREAD_DATA * out);
 void freeHeaders(char **);
 long dbgprintf(const char *format, ...);
 
-void server(Request request);
+void server(Request * request, Response * response);
 
 #endif                          /* NOPE_H_ */

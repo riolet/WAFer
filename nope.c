@@ -4,6 +4,7 @@
 
 #include "nope.h"
 
+/* Todo - Stop abusing preprocesser */
 #define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
 		if (isspace(fdDataList[i].readBuffer[j])) {\
 			_str_[idx]=0;\
@@ -28,6 +29,7 @@
 	_str_[idx] = fdDataList[i].readBuffer[j];\
 	idx++;\
 		}
+/* End preprocessor abuse */
 
 #define FCNTL_ADD(s, fl) fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | fl)
 #define FCNTL_NONBLOCK(s) FCNTL_ADD(s, O_NONBLOCK)
@@ -252,7 +254,8 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         fdDataList[i].methodIdx = idx;
         fdDataList[i].readBufferIdx = j;
 
-        if (idx == MAX_METHOD_SIZE) {   /*We don't like really long methods. Cut em off */
+        /*We don't like really long methods. Cut em off */
+        if (idx == MAX_METHOD_SIZE) {
             fdDataList[i].method[idx] = 0;
             fdDataList[i].state = STATE_URI;
         }
@@ -276,7 +279,8 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         fdDataList[i].uriIdx = idx;
         fdDataList[i].readBufferIdx = j;
 
-        if (idx == MAX_REQUEST_SIZE) {  /*We don't like really long URIs either. Cut em off */
+        /*We don't like really long URIs either. Cut em off */
+        if (idx == MAX_REQUEST_SIZE) {
             fdDataList[i].uri[idx] = 0;
             fdDataList[i].state = STATE_VERSION;
         }
@@ -298,7 +302,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         fdDataList[i].readBufferIdx = j;
 
         /*We don't like really long version either. Cut em off */
-        if (idx == MAX_VER_SIZE) {      /*We don't like really long URIs either. Cut em off */
+        if (idx == MAX_VER_SIZE) {
             fdDataList[i].ver[idx] = 0;
             fdDataList[i].state = STATE_HEADER;
         }
@@ -345,26 +349,29 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
     }
 
     Request request;
+    Response response;
     if (fdDataList[i].state == STATE_COMPLETE_READING) {
-
-        request.client = i;
         request.reqStr = fdDataList[i].uri;
         request.method = fdDataList[i].method;
         request.ver = fdDataList[i].ver;
         request.headers = fdDataList[i].headers;
-
+        response.fd=i;
+        response.flags=0;
+        response.apiFlags=0;
 #ifdef NOPE_THREADS
         THREAD_DATA td;
         td.fd = i;
         td.fdDataList = fdDataList;
         td.pMaster = pMaster;
         td.request = request;
+        td.response = response;
         dbgprintf(KNRM "SM:Farming %d->%d\n" KNRM, fifo->head, fifo->tail);
         farmer_thread(td);
         dbgprintf(KNRM "SM:Done Farming %d->%d\n" KNRM, fifo->head, fifo->tail);
         done = false;
 #else
-        server(request);
+        server(&request,&response);
+        dbgprintf(KGRN "Worker: completed with response %d\n" KNRM, response.status);
         done = true;
 #endif
     }
@@ -697,8 +704,8 @@ void *worker_thread(void *arg)
         pthread_cond_signal(fifo->notFull);
         dbgprintf("td.fdDataList %d, td.fd %d, td.pMaster %d, td.request.headers0 %s\n",
                   td.fdDataList, td.fd, td.pMaster, td.request.headers[0]);
-        server(td.request);
-        dbgprintf(KGRN "Worker: finished  %d\n" KNRM, td.fd);
+        server(&td.request,&td.response);
+        dbgprintf(KGRN "Worker: completed %d with response %d\n" KNRM, td.fd,td.response.status);
         //clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
         pthread_mutex_lock(cleaner_fifo->mut);
         while (cleaner_fifo->full) {
@@ -818,8 +825,8 @@ int main(void)
     /* Get max number of files. */
     getrlimit(RLIMIT_NOFILE, &limit);
 
-    printf("The soft limit is %llu\n", limit.rlim_cur);
-    printf("The hard limit is %llu\n", limit.rlim_max);
+    dbgprintf("The soft limit is %llu\n", limit.rlim_cur);
+    dbgprintf("The hard limit is %llu\n", limit.rlim_max);
     initialize_threads();
 #endif
 

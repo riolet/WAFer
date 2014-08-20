@@ -11,8 +11,16 @@ ssize_t writeLongString(int client, const char *longString, size_t len);
 static void cat(int client, FILE * pFile);
 /*End internal functions */
 
-long resPrintf(Request request, const char *format, ...)
+long resPrintf(Response * response, const char *format, ...)
 {
+	if (!(response->apiFlags&API_FLAGS_HEADER_SENT)) {
+		if (!(response->apiFlags&API_FLAGS_SET_HEADER_BEFORE_SENDING)) {
+			response->apiFlags|=API_FLAGS_HEADER_SENT;
+			sendStatusOKHeadersTypeEncoding(response,"text/html",NULL);
+		} else {
+			/*sendHeadersResponse*/
+		}
+	}
     /* initial buffer large enough for most cases, will resize if required */
     char *buf = malloc(MAX_BUFFER_SIZE);
     int len;
@@ -37,9 +45,9 @@ long resPrintf(Request request, const char *format, ...)
     }
 
     if (len < MAX_BUFFER_SIZE) {
-        done = (int)send(request.client, buf, len, 0);
+        done = (int)send(response->fd, buf, len, 0);
     } else {
-        done = writeLongString(request.client, buf, len);
+        done = writeLongString(response->fd, buf, len);
     }
 
     free(buf);
@@ -48,70 +56,80 @@ long resPrintf(Request request, const char *format, ...)
 
 /*Writes the given null-terminated string to the compressed file, excluding the terminating null character.
 Returns the number of characters written, or -1 in case of error */
-long resPuts(Request request, const char *buffer)
+long resPuts(Response * response, const char *buffer)
 {
-	send(request.client, buffer, strlen(buffer), 0);
+	if (!(response->apiFlags&API_FLAGS_HEADER_SENT)) {
+		if (!(response->apiFlags&API_FLAGS_SET_HEADER_BEFORE_SENDING)) {
+			response->apiFlags|=API_FLAGS_HEADER_SENT;
+			sendStatusOKHeadersTypeEncoding(response,"text/html",NULL);
+		} else {
+			/*sendHeadersResponse*/
+		}
+	}
+	return send(response->fd, buffer, strlen(buffer), 0);
 }
 
 /* Serve file. */
 /* If displayFilename is not null, the file will be downloadable */
-void serveFile(Request request, const char *filename, const char *displayFilename,
+void serveFile(Response * response, const char *filename, const char *displayFilename,
                            const char *type)
 {
     FILE *resource = NULL;
 
-    STATIC_SEND(request.client, "HTTP/1.0 200 OK\r\n");
-    STATIC_SEND(request.client, SERVER_STRING);
+    STATIC_SEND(response->fd, "HTTP/1.0 200 OK\r\n");
+    STATIC_SEND(response->fd, SERVER_STRING);
 
-    resPrintf(request, "Content-Type: %s\r\n", type);
+    resPrintf(response, "Content-Type: %s\r\n", type);
 
     if (displayFilename!=NULL) {
-    	resPrintf(request, "Content-Disposition: attachment; filename=\"%s\"\r\n",
+    	resPrintf(response, "Content-Disposition: attachment; filename=\"%s\"\r\n",
              displayFilename);
     }
 
-    STATIC_SEND(request.client, "\r\n");
+    STATIC_SEND(response->fd, "\r\n");
 
     resource = fopen(filename, "r");
     if (resource == NULL) {
-    	sendResourceNotFound(request);
+    	sendResourceNotFound(response);
     } else {
-        cat(request.client, resource);
+        cat(response->fd, resource);
     }
     fclose(resource);
 }
 
-void sendHeadersTypeEncoding(Request request, const char *type, const char *encoding)
+void sendStatusOKHeadersTypeEncoding(Response * response, const char *type, const char *encoding)
 {
-    STATIC_SEND(request.client, "HTTP/1.0 200 OK\r\n");
-    STATIC_SEND(request.client, SERVER_STRING);
-    resPrintf(request, "Content-Type: %s\r\n", type);
+    STATIC_SEND(response->fd, "HTTP/1.0 200 OK\r\n");
+    STATIC_SEND(response->fd, SERVER_STRING);
+    resPrintf(response, "Content-Type: %s\r\n", type);
     if (encoding != NULL) {
-        resPrintf(request, "Content-Encoding: %s\r\n", encoding);
+        resPrintf(response, "Content-Encoding: %s\r\n", encoding);
     }
-    STATIC_SEND(request.client, "Vary: Accept-Encoding\r\n");
-    STATIC_SEND(request.client, "\r\n");
+    STATIC_SEND(response->fd, "Vary: Accept-Encoding\r\n");
+    STATIC_SEND(response->fd, "\r\n");
+    response->status=STATUS_HTTP_OK;
 }
 
-void sendResourceNotFound(Request request)
+void sendResourceNotFound(Response * response)
 {
-	STATIC_SEND(request.client, "HTTP/1.0 404 NOT FOUND\r\n");
-	STATIC_SEND(request.client, "Content-Type: text/html\r\n");
-	STATIC_SEND(request.client, "\r\n");
-	STATIC_SEND(request.client, "<HTML><TITLE>Not Found</TITLE>\r\n");
-	STATIC_SEND(request.client, "<BODY><P>The server could not fulfill\r\n");
-	STATIC_SEND(request.client, "your request because the resource specified\r\n");
-	STATIC_SEND(request.client, "is unavailable or nonexistent.\r\n");
-	STATIC_SEND(request.client, "</P></BODY></HTML>\r\n");
+	STATIC_SEND(response->fd, "HTTP/1.0 404 NOT FOUND\r\n");
+	STATIC_SEND(response->fd, "Content-Type: text/html\r\n");
+	STATIC_SEND(response->fd, "\r\n");
+	STATIC_SEND(response->fd, "<HTML><TITLE>Not Found</TITLE>\r\n");
+	STATIC_SEND(response->fd, "<BODY><P>The server could not fulfill\r\n");
+	STATIC_SEND(response->fd, "your request because the resource specified\r\n");
+	STATIC_SEND(response->fd, "is unavailable or nonexistent.\r\n");
+	STATIC_SEND(response->fd, "</P></BODY></HTML>\r\n");
+	response->status=STATUS_HTTP_NOT_FOUND;
 }
 
 /*Input Functions */
-char *resQuickForm(Request request, const char *msg, const char *inputstr,bool onlyIfNull)
+char *resQuickForm(Request *request, Response *response, const char *msg, const char *inputstr)
 {
     char *qpath = getQueryPath(request);
     char *qparam = getQueryParam(request,"q");
-    if (!(onlyIfNull&&qparam != NULL)) {
-        resPrintf(request, OTAGA(form, action = "%s")
+    if (!((API_FLAGS_FORM_ONLY_ON_NULL&response->apiFlags)&&qparam != NULL)) {
+        resPrintf(response, OTAGA(form, action = "%s")
                  "%s%s" STAG(input, type = "submit") CTAG(form), qpath, msg, inputstr);
     }
     free(qpath);
@@ -153,7 +171,7 @@ char *getHeader(char **headers, char *header)
  * Returns: the value of the query parameter */
 /**********************************************************************/
 
-char *getQueryParam(Request request, const char *name)
+char *getQueryParam(Request *request, const char *name)
 {
     char bufferAmpersand[MAX_BUFFER_SIZE];
     char bufferQuestion[MAX_BUFFER_SIZE];
@@ -170,11 +188,11 @@ char *getQueryParam(Request request, const char *name)
     int i;
 
     buffer = bufferQuestion;
-    pos1 = strstr(request.reqStr, bufferQuestion);
+    pos1 = strstr(request->reqStr, bufferQuestion);
     dbgprintf("Buffer %s Pos %s\n", buffer, pos1);
     if (!pos1) {
         buffer = bufferAmpersand;
-        pos1 = strstr(request.reqStr, bufferAmpersand);
+        pos1 = strstr(request->reqStr, bufferAmpersand);
     }
     if (pos1) {
         pos1 += strlen(buffer);
@@ -208,12 +226,12 @@ char *getQueryParam(Request request, const char *name)
  * Returns: the query path */
 /**********************************************************************/
 
-char *getQueryPath(Request request)
+char *getQueryPath(Request *request)
 {
     char *queryPath;
-    queryPath = strdup(request.reqStr);
+    queryPath = strdup(request->reqStr);
     u_int i;
-    for (i = 0; i < strlen(request.reqStr) && (queryPath[i] != '?') && (queryPath[i] != '\0');
+    for (i = 0; i < strlen(request->reqStr) && (queryPath[i] != '?') && (queryPath[i] != '\0');
          i++) {
     }
 
@@ -222,16 +240,13 @@ char *getQueryPath(Request request)
     return queryPath;
 }
 
-bool routeRequest(Request request, const char *path, void (*function) (Request),
-                bool send_headers)
+bool routeRequest(Request *request, Response * response, const char *path, void (*function) (Request *, Response *))
 {
     char *queryPath = getQueryPath(request);
     if (strcmp(queryPath, path) == 0) {
         free(queryPath);
-        if (send_headers)
-        	sendHeadersTypeEncoding(request,"text/html",NULL);
         if (function != NULL)
-            function(request);
+            function(request, response);
         return true;
     } else {
         free(queryPath);

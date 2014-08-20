@@ -1,3 +1,5 @@
+#ifndef NOPEAPI_H_
+#define NOPEAPI_H_
 /* ENTL */
 #define STR(X) #X
 #define WSPC " "
@@ -29,19 +31,23 @@
 #define QTAGAPARAMQ(tag,attributes,text) OTAGA(tag,attributes name=STR(q)) text CTAG(tag)       /*<tag attributes> text </tag> */
 /* End ENTL */
 
-long resPrintf(Request request, const char *format, ...);
-void serveFile(Request request, const char *filename, const char *displayFilename,
+long resPrintf(Response *response, const char *format, ...);
+void serveFile(Response *response, const char *filename, const char *displayFilename,
                            const char *type);
 
-void sendHeadersTypeEncoding(Request request, const char *type, const char *encoding);
-void sendResourceNotFound(Request request);
+void sendStatusOKHeadersTypeEncoding(Response *response, const char *type, const char *encoding);
+void sendResourceNotFound(Response *response);
 
-char *resQuickForm(Request request, const char *msg, const char *inputstr,bool onlyIfNull);
-#define RES_QUICK_FORM_TEXT(request,msg,onlyIfNull) resQuickForm(request,msg,STAGPARAMQ(input,type="text"),onlyIfNull)
+char *resQuickForm(Request *request, Response *response, const char *msg, const char *inputstr);
+#define QUICK_FORM_TEXT(request,response,msg) resQuickForm(request,response,msg,STAGPARAMQ(input,type="text"))
 
-char *getQueryParam(Request request, const char *name);
-char *getQueryPath(Request request);
-bool routeRequest(Request request, const char *path, void (*function) (Request),
-                bool send_headers);
+char *getQueryParam(Request *request, const char *name);
+char *getQueryPath(Request *request);
+bool routeRequest(Request *request, Response * response, const char *path, void (*function) (Request *, Response *));
+long resPuts(Response * response, const char *buffer);
 /*Internal stuff follows. Could change in future. Do not use */
 #define STATIC_SEND(_socket, _str) send(_socket, _str, sizeof(_str)-1, 0)
+#define API_FLAGS_HEADER_SENT 1
+#define API_FLAGS_SET_HEADER_BEFORE_SENDING API_FLAGS_HEADER_SENT*2
+#define API_FLAGS_FORM_ONLY_ON_NULL API_FLAGS_SET_HEADER_BEFORE_SENDING*2
+#endif

@@ -2,24 +2,24 @@
 #include "nopeapi.h"
 #include <string.h>
 
-static void factor(Request request);
+static void factor(Request *request, Response *response);
 
-void server(Request request)
+void server(Request * request, Response * response)
 {
-    routeRequest(request, "/factor", factor,true);
+	routeRequest(request, response,"/factor", factor);
 }
 
-static void factor(Request request)
+static void factor(Request *request, Response *response)
 {
-    char *nStr = RES_QUICK_FORM_TEXT(request, "Number to factor:",false);
+    char *nStr = QUICK_FORM_TEXT(request,response,"Number to factor:");
 
     if (nStr != NULL) {
         long n = strtol(nStr, NULL, 10);
-        resPrintf(request, "Factors of %li are: ", n);
+        resPrintf(response, "Factors of %li are: ", n);
         long l;
         for (l = 2; l <= n; ++l) {
             if (n % l == 0) {
-            	resPrintf(request, "%li ", l);
+            	resPrintf(response, "%li ", l);
             }
         }
     }
