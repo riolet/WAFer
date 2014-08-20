@@ -2,16 +2,17 @@
 #include "nopeutils.h"
 #include <string.h>
 
-void factor(int client, const char *reqStr, const char *method);
+void factor(Request request);
 
 void server(Request request)
 {
-    routefh(request, "/factor", &factor);
+    nope_route(request, "/factor", &factor, true);
 }
 
-void factor(int client, const char *reqStr, const char *factor)
+void factor(Request request)
 {
-    char *nStr = HSCANIT(client, reqStr, "Number to factor:");
+    int client = request.client;
+    char *nStr = HSCANIT(client, request.reqStr, "Number to factor:");
 
     if (strcmp(nStr, UNDEFINED) != 0) {
         long n = strtol(nStr, NULL, 10);
