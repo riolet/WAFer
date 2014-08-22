@@ -384,7 +384,7 @@ bool nope_route(Request request, const char *path, void (*function) (Request),
 {
     const char *q = request.reqStr;
     while(*path && *q && *path++ == *q++);
-    if (*path == 0) {
+    if (*path == 0 && (*q == 0 || *q == '?')) {
         if (send_headers)
             writeStandardHeaders(request.client);
         if (function != NULL)
