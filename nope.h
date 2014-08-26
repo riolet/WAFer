@@ -78,9 +78,13 @@ typedef int bool;
 
 typedef struct struct_request {
     char *reqStr;
+    size_t reqStrLen;
     char *method;
+    size_t methodLen;
     char *ver;
+    size_t verLen;
     char **headers;
+    size_t headersLen;
 } Request;
 
 typedef struct struct_response {

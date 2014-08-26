@@ -352,9 +352,13 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
     Response response;
     if (fdDataList[i].state == STATE_COMPLETE_READING) {
         request.reqStr = fdDataList[i].uri;
+        request.headersLen = fdDataList[i].headersIdx;
         request.method = fdDataList[i].method;
+        request.methodLen = fdDataList[i].methodIdx;
         request.ver = fdDataList[i].ver;
+        request.verLen = fdDataList[i].verIdx;
         request.headers = fdDataList[i].headers;
+        request.headersLen = fdDataList[i].headersIdx;
         response.fd=i;
         response.flags=0;
         response.apiFlags=0;
