@@ -13,11 +13,13 @@ static void cat(int client, FILE * pFile);
 
 long resPrintf(Response * response, const char *format, ...)
 {
+	dbgprintf("Flags %d API Flags% d response.status %d\n",response->flags,response->apiFlags,response->status);
 	if (!(response->apiFlags&API_FLAGS_HEADER_SENT)) {
-		if (!(response->apiFlags&API_FLAGS_SET_HEADER_BEFORE_SENDING)) {
+		if (!(response->apiFlags&API_FLAGS_DONT_SET_HEADER_BEFORE_SENDING)) {
 			response->apiFlags|=API_FLAGS_HEADER_SENT;
 			sendStatusOKHeadersTypeEncoding(response,"text/html",NULL);
 		} else {
+
 			/*sendHeadersResponse*/
 		}
 	}
@@ -59,7 +61,7 @@ Returns the number of characters written, or -1 in case of error */
 long resPuts(Response * response, const char *buffer)
 {
 	if (!(response->apiFlags&API_FLAGS_HEADER_SENT)) {
-		if (!(response->apiFlags&API_FLAGS_SET_HEADER_BEFORE_SENDING)) {
+		if (!(response->apiFlags&API_FLAGS_DONT_SET_HEADER_BEFORE_SENDING)) {
 			response->apiFlags|=API_FLAGS_HEADER_SENT;
 			sendStatusOKHeadersTypeEncoding(response,"text/html",NULL);
 		} else {

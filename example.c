@@ -6,6 +6,7 @@ static void factor(Request *request, Response *response);
 
 void server(Request * request, Response * response)
 {
+	printf("%s %s",request->method,request->reqStr);
 	routeRequest(request, response,"/factor", factor);
 }
 

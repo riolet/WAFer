@@ -4,32 +4,14 @@
 
 #include "nope.h"
 
-/* Todo - Stop abusing preprocesser */
-#define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-		if (isspace(fdDataList[i].readBuffer[j])) {\
-			_str_[idx]=0;\
-			fdDataList[i].state = _state_;\
-			j++;\
-			break;\
-		}
-
-#define ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-		if (fdDataList[i].readBuffer[j]=='\n') {\
-			_str_[idx]=0;\
-			fdDataList[i].state = _state_;\
-			j++;\
-			break;\
-		}
-
-#define ON_SLASH_R_IGNORE\
-		if (fdDataList[i].readBuffer[j]=='\r') { /*Do nothing*/ }
-
-#define ON_EVERYTHING_ELSE_CONSUME(_str_)\
-		{\
-	_str_[idx] = fdDataList[i].readBuffer[j];\
-	idx++;\
-		}
-/* End preprocessor abuse */
+static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, int * cur_state, int state) {
+	if (conditition) {
+		*str=0;
+		*cur_state = state;
+		return true;
+	}
+	return false;
+}
 
 #define FCNTL_ADD(s, fl) fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | fl)
 #define FCNTL_NONBLOCK(s) FCNTL_ADD(s, O_NONBLOCK)
@@ -242,13 +224,18 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_METHOD_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method, STATE_HEADER)
-                else
-            ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method, STATE_URI)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].method) j++;
+        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_URI)) {
+        		j++;
+        		break;
+        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+        	} else if (fdDataList[i].readBuffer[j]=='\r') {
+        		/*do nothing */
+        	} else {
+        		fdDataList[i].method[idx++] = fdDataList[i].readBuffer[j];
+        	}
+        	j++;
         }
 
         fdDataList[i].methodIdx = idx;
@@ -267,13 +254,18 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_REQUEST_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri, STATE_HEADER)
-                else
-            ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri, STATE_VERSION)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].uri) j++;
+        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_VERSION)) {
+        		j++;
+        		break;
+        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+        	} else if (fdDataList[i].readBuffer[j]=='\r') {
+        		/*do nothing */
+        	} else {
+        		fdDataList[i].uri[idx++] = fdDataList[i].readBuffer[j];
+        	}
+        	j++;
         }
 
         fdDataList[i].uriIdx = idx;
@@ -292,11 +284,15 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_VER_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].ver, STATE_HEADER)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].ver) j++;
+        	if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].ver[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+			} else if (fdDataList[i].readBuffer[j]=='\r') {
+				/*do nothing */
+			} else {
+				fdDataList[i].ver[idx++] = fdDataList[i].readBuffer[j];
+			}
+        	j++;
         }
         fdDataList[i].verIdx = idx;
         fdDataList[i].readBufferIdx = j;
@@ -362,6 +358,8 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         response.fd=i;
         response.flags=0;
         response.apiFlags=0;
+        response.status=0;
+        dbgprintf(KGRN "Calling Worker with:%s\n" KNRM, request.reqStr);
 #ifdef NOPE_THREADS
         THREAD_DATA td;
         td.fd = i;

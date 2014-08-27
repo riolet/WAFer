@@ -48,6 +48,6 @@ long resPuts(Response * response, const char *buffer);
 /*Internal stuff follows. Could change in future. Do not use */
 #define STATIC_SEND(_socket, _str) send(_socket, _str, sizeof(_str)-1, 0)
 #define API_FLAGS_HEADER_SENT 1
-#define API_FLAGS_SET_HEADER_BEFORE_SENDING API_FLAGS_HEADER_SENT*2
-#define API_FLAGS_FORM_ONLY_ON_NULL API_FLAGS_SET_HEADER_BEFORE_SENDING*2
+#define API_FLAGS_DONT_SET_HEADER_BEFORE_SENDING API_FLAGS_HEADER_SENT*2
+#define API_FLAGS_FORM_ONLY_ON_NULL API_FLAGS_DONT_SET_HEADER_BEFORE_SENDING*2
 #endif
