@@ -8,7 +8,7 @@
 
 /*Internal functions don't use */
 ssize_t writeLongString(int client, const char *longString, size_t len);
-static void cat(int client, FILE * pFile);
+static void sendFileWithSelect(int client, int read_fd, struct stat stat_buf);
 /*End internal functions */
 
 long resPrintf(Response * response, const char *format, ...)
@@ -76,27 +76,32 @@ long resPuts(Response * response, const char *buffer)
 void serveFile(Response * response, const char *filename, const char *displayFilename,
                            const char *type)
 {
-    FILE *resource = NULL;
+    FILE *pFile = NULL;
+    response->apiFlags |= API_FLAGS_DONT_SET_HEADER_BEFORE_SENDING;
 
-    STATIC_SEND(response->fd, "HTTP/1.0 200 OK\r\n");
-    STATIC_SEND(response->fd, SERVER_STRING);
-
-    resPrintf(response, "Content-Type: %s\r\n", type);
-
-    if (displayFilename!=NULL) {
-    	resPrintf(response, "Content-Disposition: attachment; filename=\"%s\"\r\n",
-             displayFilename);
-    }
-
-    STATIC_SEND(response->fd, "\r\n");
-
-    resource = fopen(filename, "r");
-    if (resource == NULL) {
+    pFile = fopen(filename, "r");
+    if (pFile == NULL) {
     	sendResourceNotFound(response);
     } else {
-        cat(response->fd, resource);
+        int read_fd = fileno(pFile);
+        struct stat stat_buf;
+        fstat (read_fd, &stat_buf);
+
+        STATIC_SEND(response->fd, "HTTP/1.0 200 OK\r\n");
+        STATIC_SEND(response->fd, SERVER_STRING);
+
+        resPrintf(response, "Content-Type: %s\r\n", type);
+        resPrintf(response, "Content-Length: %d\r\n", stat_buf.st_size);
+        if (displayFilename!=NULL) {
+            resPrintf(response, "Content-Disposition: attachment; filename=\"%s\"\r\n",
+                 displayFilename);
+        }
+
+        STATIC_SEND(response->fd, "\r\n");
+
+        sendFileWithSelect(response->fd, read_fd, stat_buf);
     }
-    fclose(resource);
+    fclose(pFile);
 }
 
 void sendStatusOKHeadersTypeEncoding(Response * response, const char *type, const char *encoding)
@@ -257,16 +262,55 @@ bool routeRequest(Request *request, Response * response, const char *path, void 
 }
 
 /*Internal stuff follows. Could change in future. Do not use */
-static void cat(int client, FILE * pFile)
+ #ifndef __linux__
+ssize_t sendfile_nope (int write_fd, int read_fd, off_t *offset,int remain)
 {
-    char buf[1024];
+    char buf[BUFFLEN];
+    lseek(read_fd, *offset, SEEK_SET);
+    ssize_t bytes_read = read(read_fd, buf, BUFFLEN);
+    ssize_t bytes_written = write(write_fd, cbuf, bytes_read);
+    return bytes_written;
+}
+#endif // __linux__
 
-    int result = fread(buf, 1, 1024, pFile);
+static void sendFileWithSelect(int write_fd, int read_fd, struct stat stat_buf)
+{
+    off_t offset = 0;
 
-    while (result != 0) {
-        send(client, buf, result, 0);
-        result = fread(buf, 1, 1024, pFile);
-    }
+    size_t remain = stat_buf.st_size;
+    size_t sent = 0;
+    fd_set write_fds;
+    FD_ZERO(&write_fds);
+    FD_SET(write_fd,&write_fds);
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+
+     while (remain) {
+        dbgprintf("Remain %d out of %d \n",remain,stat_buf.st_size);
+        int selected = select (write_fd + 1, NULL, &write_fds, NULL, &timeout);
+        if (selected < 0) {
+            return; //TODO-Error Logging
+        } else if (selected == 0) {
+            dbgprintf("Timed out. Going back in \n");
+            continue; //Timed out. Loop again.
+        }
+        #ifdef __linux__
+        ssize_t sent_once = sendfile (write_fd, read_fd, &offset, remain);
+        #else
+        ssize_t sent_once = sendfile_nope (write_fd, read_fd, &offset, remain);
+        #endif // __linux__
+        if (sent_once <= 0)
+            return;
+        sent += sent_once;
+        offset = sent;
+        remain -= sent_once;
+     }
+
+
+     /* Close up. */
+     close (read_fd);
+     close (write_fd);
 }
 
 ssize_t writeLongString(int client, const char *longString, size_t len)
