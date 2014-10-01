@@ -4,30 +4,14 @@
 
 #include "nope.h"
 
-#define ON_SPACE_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-		if (isspace(fdDataList[i].readBuffer[j])) {\
-			_str_[idx]=0;\
-			fdDataList[i].state = _state_;\
-			j++;\
-			break;\
-		}
-
-#define ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(_str_,_state_)\
-		if (fdDataList[i].readBuffer[j]=='\n') {\
-			_str_[idx]=0;\
-			fdDataList[i].state = _state_;\
-			j++;\
-			break;\
-		}
-
-#define ON_SLASH_R_IGNORE\
-		if (fdDataList[i].readBuffer[j]=='\r') { /*Do nothing*/ }
-
-#define ON_EVERYTHING_ELSE_CONSUME(_str_)\
-		{\
-	_str_[idx] = fdDataList[i].readBuffer[j];\
-	idx++;\
-		}
+static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, int * cur_state, int state) {
+	if (conditition) {
+		*str=0;
+		*cur_state = state;
+		return true;
+	}
+	return false;
+}
 
 #define FCNTL_ADD(s, fl) fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | fl)
 #define FCNTL_NONBLOCK(s) FCNTL_ADD(s, O_NONBLOCK)
@@ -240,19 +224,25 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_METHOD_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method, STATE_HEADER)
-                else
-            ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].method, STATE_URI)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].method) j++;
+        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_URI)) {
+        		j++;
+        		break;
+        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+        	} else if (fdDataList[i].readBuffer[j]=='\r') {
+        		/*do nothing */
+        	} else {
+        		fdDataList[i].method[idx++] = fdDataList[i].readBuffer[j];
+        	}
+        	j++;
         }
 
         fdDataList[i].methodIdx = idx;
         fdDataList[i].readBufferIdx = j;
 
-        if (idx == MAX_METHOD_SIZE) {   /*We don't like really long methods. Cut em off */
+        /*We don't like really long methods. Cut em off */
+        if (idx == MAX_METHOD_SIZE) {
             fdDataList[i].method[idx] = 0;
             fdDataList[i].state = STATE_URI;
         }
@@ -264,19 +254,25 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_REQUEST_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri, STATE_HEADER)
-                else
-            ON_SPACE_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].uri, STATE_VERSION)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].uri) j++;
+        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_VERSION)) {
+        		j++;
+        		break;
+        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+        	} else if (fdDataList[i].readBuffer[j]=='\r') {
+        		/*do nothing */
+        	} else {
+        		fdDataList[i].uri[idx++] = fdDataList[i].readBuffer[j];
+        	}
+        	j++;
         }
 
         fdDataList[i].uriIdx = idx;
         fdDataList[i].readBufferIdx = j;
 
-        if (idx == MAX_REQUEST_SIZE) {  /*We don't like really long URIs either. Cut em off */
+        /*We don't like really long URIs either. Cut em off */
+        if (idx == MAX_REQUEST_SIZE) {
             fdDataList[i].uri[idx] = 0;
             fdDataList[i].state = STATE_VERSION;
         }
@@ -288,17 +284,21 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_VER_SIZE) {
-            ON_SLASH_N_TERMINATE_STRING_CHANGE_STATE(fdDataList[i].ver, STATE_HEADER)
-                else
-            ON_SLASH_R_IGNORE
-            else
-            ON_EVERYTHING_ELSE_CONSUME(fdDataList[i].ver) j++;
+        	if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].ver[idx],i,&fdDataList[i].state,STATE_HEADER)) {
+        		j++;
+        		break;
+			} else if (fdDataList[i].readBuffer[j]=='\r') {
+				/*do nothing */
+			} else {
+				fdDataList[i].ver[idx++] = fdDataList[i].readBuffer[j];
+			}
+        	j++;
         }
         fdDataList[i].verIdx = idx;
         fdDataList[i].readBufferIdx = j;
 
         /*We don't like really long version either. Cut em off */
-        if (idx == MAX_VER_SIZE) {      /*We don't like really long URIs either. Cut em off */
+        if (idx == MAX_VER_SIZE) {
             fdDataList[i].ver[idx] = 0;
             fdDataList[i].state = STATE_HEADER;
         }
@@ -345,26 +345,35 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
     }
 
     Request request;
+    Response response;
     if (fdDataList[i].state == STATE_COMPLETE_READING) {
-
-        request.client = i;
         request.reqStr = fdDataList[i].uri;
+        request.headersLen = fdDataList[i].headersIdx;
         request.method = fdDataList[i].method;
+        request.methodLen = fdDataList[i].methodIdx;
         request.ver = fdDataList[i].ver;
+        request.verLen = fdDataList[i].verIdx;
         request.headers = fdDataList[i].headers;
-
+        request.headersLen = fdDataList[i].headersIdx;
+        response.fd=i;
+        response.flags=0;
+        response.apiFlags=0;
+        response.status=0;
+        dbgprintf(KGRN "Calling Worker with:%s\n" KNRM, request.reqStr);
 #ifdef NOPE_THREADS
         THREAD_DATA td;
         td.fd = i;
         td.fdDataList = fdDataList;
         td.pMaster = pMaster;
         td.request = request;
+        td.response = response;
         dbgprintf(KNRM "SM:Farming %d->%d\n" KNRM, fifo->head, fifo->tail);
         farmer_thread(td);
         dbgprintf(KNRM "SM:Done Farming %d->%d\n" KNRM, fifo->head, fifo->tail);
         done = false;
 #else
-        server(request);
+        server(&request,&response);
+        dbgprintf(KGRN "Worker: completed with response %d\n" KNRM, response.status);
         done = true;
 #endif
     }
@@ -697,8 +706,8 @@ void *worker_thread(void *arg)
         pthread_cond_signal(fifo->notFull);
         dbgprintf("td.fdDataList %d, td.fd %d, td.pMaster %d, td.request.headers0 %s\n",
                   td.fdDataList, td.fd, td.pMaster, td.request.headers[0]);
-        server(td.request);
-        dbgprintf(KGRN "Worker: finished  %d\n" KNRM, td.fd);
+        server(&td.request,&td.response);
+        dbgprintf(KGRN "Worker: completed %d with response %d\n" KNRM, td.fd,td.response.status);
         //clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
         pthread_mutex_lock(cleaner_fifo->mut);
         while (cleaner_fifo->full) {
@@ -818,8 +827,8 @@ int main(void)
     /* Get max number of files. */
     getrlimit(RLIMIT_NOFILE, &limit);
 
-    printf("The soft limit is %llu\n", limit.rlim_cur);
-    printf("The hard limit is %llu\n", limit.rlim_max);
+    dbgprintf("The soft limit is %llu\n", limit.rlim_cur);
+    dbgprintf("The hard limit is %llu\n", limit.rlim_max);
     initialize_threads();
 #endif
 

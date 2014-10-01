@@ -1,7 +1,7 @@
 #include "nope.h"
-#include "nopeutils.h"
+#include "nopeapi.h"
 
-void server(Request request)
+void server(Request * request, Response * response)
 {
     /*Your code goes here */
 }
