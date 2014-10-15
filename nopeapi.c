@@ -310,7 +310,6 @@ static void sendFileWithSelect(int write_fd, int read_fd, struct stat stat_buf)
 
      /* Close up. */
      close (read_fd);
-     close (write_fd);
 }
 
 ssize_t writeLongString(int client, const char *longString, size_t len)
