@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/riolet/wafer.svg?branch=master)](https://travis-ci.org/riolet/wafer)
+[![Build Status](https://travis-ci.org/riolet/WAFer.svg?branch=master)](https://travis-ci.org/riolet/WAFer)
 
 #WAFer
 
