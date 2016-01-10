@@ -1,12 +1,12 @@
 [![Build Status](https://travis-ci.org/riolet/nope.c.svg?branch=master)](https://travis-ci.org/riolet/nope.c)
 
-#nope.c
+#WAFer
 
-nope.c is a C language-based ultra-light software platform for scalable server-side and networking applications. Think node.js for C programmers.
+WAFer is a C language-based ultra-light scalable server-side web applications framework. Think node.js for C programmers. Because it's written in C for C programmers, WAFer is wafer-thin, and consumes as few resources as possible.
 
-Just put your code inside the function `void server(Request request)` in `server.c` and you are good to go.
+Just copy server.c (say, as myserver.c), put your code inside the function `void server(Request request)` in `myserver.c` and, make with `make SERVER=myserver`, and you are good to go.
 
-nope.c can operate in many different configurations, all selected at compile time. They include:
+WAFer can operate in many different configurations, all selected at compile time. They include:
 
 
 1. Single-threaded (Default) or multi-threaded (make with `THREADS=n` where n>0)
@@ -18,7 +18,7 @@ nope.c can operate in many different configurations, all selected at compile tim
 
 Default port is 4242. Set environment variable 'PORT' to change it.
 
-That's really it. The source comes with a simple example `factor.c` to get you started.
+That's really it. The source comes with a simple example `example.c` to get you started.
 
 ###Note to Contributors
 
