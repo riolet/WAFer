@@ -1,5 +1,5 @@
-#include "nope.h"
-#include "nopeapi.h"
+#include "wafer.h"
+#include "waferapi.h"
 
 /* Ver 0.0.5 Functions
  * Parameters: request, format, (optional) variadargs
@@ -227,7 +227,7 @@ char *getQueryParam(Request *request, const char *name)
 
 /**********************************************************************/
 /* Return the query path. For example the query path for
- * http://nopedotc.com/faq is /faq
+ * http://waferdotc.com/faq is /faq
  * Note the / at the beginning
  * Parameters: the request
  * Returns: the query path */
@@ -263,7 +263,7 @@ bool routeRequest(Request *request, Response * response, const char *path, void 
 
 /*Internal stuff follows. Could change in future. Do not use */
  #ifndef __linux__
-ssize_t sendfile_nope (int write_fd, int read_fd, off_t *offset,int remain)
+ssize_t sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain)
 {
     char buf[BUFFLEN];
     lseek(read_fd, *offset, SEEK_SET);
@@ -298,7 +298,7 @@ static void sendFileWithSelect(int write_fd, int read_fd, struct stat stat_buf)
         #ifdef __linux__
         ssize_t sent_once = sendfile (write_fd, read_fd, &offset, remain);
         #else
-        ssize_t sent_once = sendfile_nope (write_fd, read_fd, &offset, remain);
+        ssize_t sent_once = sendfile_wafer (write_fd, read_fd, &offset, remain);
         #endif // __linux__
         if (sent_once <= 0)
             return;

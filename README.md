@@ -1,8 +1,8 @@
-[![Build Status](https://travis-ci.org/riolet/nope.c.svg?branch=master)](https://travis-ci.org/riolet/nope.c)
+[![Build Status](https://travis-ci.org/riolet/wafer.c.svg?branch=master)](https://travis-ci.org/riolet/wafer.c)
 
 #WAFer
 
-WAFer is a C language-based ultra-light scalable server-side web applications framework. Think node.js for C programmers. Because it's written in C for C programmers, WAFer is wafer-thin, and consumes as few resources as possible.
+WAFer is a C language-based ultra-light scalable server-side web applications framework. Think node.js for C programmers. Because it's written in C for the C eco system, WAFer is wafer-thins with a memory footprint that is only a fraction of that of node.js and other bulky frameworks.
 
 Just copy server.c (say, as myserver.c), put your code inside the function `void server(Request request)` in `myserver.c` and, make with `make SERVER=myserver`, and you are good to go.
 

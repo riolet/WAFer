@@ -1,29 +1,29 @@
 #!/bin/make
 
 ifdef THREADS
-	PTHREAD=-D NOPE_THREADS=$(THREADS) -pthread
+	PTHREAD=-D WAFER_THREADS=$(THREADS) -pthread
 endif
 
 ifdef DEBUG
 	ifeq ($(DEBUG),0) 
 		DEBUG_OPT=-ggdb
 	else
-		DEBUG_OPT=-D NOPE_DEBUG -ggdb
+		DEBUG_OPT=-D WAFER_DEBUG -ggdb
 	endif
 endif
 
 ifdef PROCESSES
-	PROCESSES_OPT=-D NOPE_PROCESSES=$(PROCESSES) -ggdb
+	PROCESSES_OPT=-D WAFER_PROCESSES=$(PROCESSES) -ggdb
 endif
 
 ifdef LOOP
 	ifeq ($(LOOP),epoll) 
-		LOOP_OPT=-D NOPE_EPOLL
+		LOOP_OPT=-D WAFER_EPOLL
 	endif	
 endif
 
 ifdef MAX_CON_CONS
-	MAX_CON_CONS_OPT=-D NOPE_MAX_CON_CONS=$(MAX_CON_CONS)
+	MAX_CON_CONS_OPT=-D WAFER_MAX_CON_CONS=$(MAX_CON_CONS)
 endif
 
 ifndef CC
@@ -34,25 +34,25 @@ EXT_OPTIONS=$(PTHREAD) $(DEBUG_OPT) $(PROCESSES_OPT) $(LOOP_OPT) $(MAX_CON_CONS_
 
 AR=ar
 CFLAGS=-W -Wall -O2 -Wno-unused-parameter -g $(EXT_OPTIONS)
-LIBNOPE_OBJ=nope.o nopeapi.o
-LIBNOPE=libnope.a
+LIBWAFER_OBJ=wafer.o waferapi.o
+LIBWAFER=libwafer.a
 MODULES=$(SERVER) example
 
 all: $(MODULES)
 
 # rule to build modules
-%: %.c $(LIBNOPE)
+%: %.c $(LIBWAFER)
 	$(CC) $(CFLAGS) -o $@ $^ $(OPTIONS)
 
-$(LIBNOPE): $(LIBNOPE_OBJ)
+$(LIBWAFER): $(LIBWAFER_OBJ)
 	$(AR) r $@ $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $< 
 
 clean:
-	rm -f $(LIBNOPE_OBJ)
+	rm -f $(LIBWAFER_OBJ)
 
 distclean:
-	rm -f $(LIBNOPE) $(LIBNOPE_OBJ) $(MODULES)
+	rm -f $(LIBWAFER) $(LIBWAFER_OBJ) $(MODULES)
 

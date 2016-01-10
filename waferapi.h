@@ -1,5 +1,5 @@
-#ifndef NOPEAPI_H_
-#define NOPEAPI_H_
+#ifndef WAFERAPI_H_
+#define WAFERAPI_H_
 /* ENTL */
 #define STR(X) #X
 #define WSPC " "

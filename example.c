@@ -1,5 +1,5 @@
-#include "nope.h"
-#include "nopeapi.h"
+#include "wafer.h"
+#include "waferapi.h"
 #include <string.h>
 
 static void factor(Request *request, Response *response);

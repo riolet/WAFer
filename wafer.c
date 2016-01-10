@@ -1,8 +1,8 @@
 /* Author: Rohana Rezel, Riolet Corporation
- * Please visit nopedotc.com for more information
+ * Please visit waferdotc.com for more information
  */
 
-#include "nope.h"
+#include "wafer.h"
 
 static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, int * cur_state, int state) {
 	if (conditition) {
@@ -21,19 +21,19 @@ void new_fd_data(FdData * fd)
     fd->state = STATE_PRE_REQUEST;
     LOG_ERROR_ON_NULL(fd->readBuffer =
                       malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR),
-                      "Can't malloc " NOPE_STR(__LINE__));
+                      "Can't malloc " WAFER_STR(__LINE__));
     LOG_ERROR_ON_NULL(fd->method =
                       malloc((MAX_METHOD_SIZE + 1) * SIZE_OF_CHAR),
-                      "Can't malloc " NOPE_STR(__LINE__));
+                      "Can't malloc " WAFER_STR(__LINE__));
     LOG_ERROR_ON_NULL(fd->uri =
                       malloc((MAX_REQUEST_SIZE + 1) * SIZE_OF_CHAR),
-                      " Can't malloc " NOPE_STR(__LINE__));
+                      " Can't malloc " WAFER_STR(__LINE__));
     LOG_ERROR_ON_NULL(fd->ver =
                       malloc((MAX_VER_SIZE + 1) * SIZE_OF_CHAR),
-                      " Can't malloc " NOPE_STR(__LINE__));
+                      " Can't malloc " WAFER_STR(__LINE__));
     LOG_ERROR_ON_NULL(fd->headers =
                       malloc(MAX_HEADERS * sizeof(char *)),
-                      " Can't malloc " NOPE_STR(__LINE__));
+                      " Can't malloc " WAFER_STR(__LINE__));
     fd->readBufferIdx = 0;
     fd->readBufferLen = 0;
     fd->methodIdx = 0;
@@ -74,7 +74,7 @@ void freeHeaders(char **headers)
 long dbgprintf(const char *format, ...)
 {
     long done = 0;
-#ifdef NOPE_DEBUG
+#ifdef WAFER_DEBUG
     int len;
     va_list arg;
     va_start(arg, format);
@@ -360,7 +360,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         response.apiFlags=0;
         response.status=0;
         dbgprintf(KGRN "Calling Worker with:%s\n" KNRM, request.reqStr);
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
         THREAD_DATA td;
         td.fd = i;
         td.fdDataList = fdDataList;
@@ -380,7 +380,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
     return done;
 }
 
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
 void initialize_threads()
 {
 
@@ -394,7 +394,7 @@ void initialize_threads()
     int i;
     fd_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(fd_mutex, NULL);
-    for (i = 0; i < NOPE_THREADS; i++) {
+    for (i = 0; i < WAFER_THREADS; i++) {
         pthread_create(&con, NULL, &worker_thread, fifo);
         //con+=sizeof(pthread_t);
     }
@@ -418,7 +418,7 @@ void select_loop(int listenfd)
     int fd, fdmax;
     int done = 0;
 
-#ifndef NOPE_MAX_CON_CONS
+#ifndef WAFER_MAX_CON_CONS
     FdData fdDataList[MAX_NO_FDS];
 #else
     FdData *fdDataList;
@@ -438,7 +438,7 @@ void select_loop(int listenfd)
     for (fd = 0; fd < fdmax; fd++) {
         fdDataList[fd].state = STATE_PRE_REQUEST;
     }
-#ifdef NOPE_EPOLL
+#ifdef WAFER_EPOLL
 
     int eventfd;
     struct epoll_event event;
@@ -458,7 +458,7 @@ void select_loop(int listenfd)
         perror("epoll_ctl");
         return;
     }
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
     /* Socket Pair */
     event.data.fd = socketpair_fd[1];
     event.events = EPOLLIN | EPOLLET;
@@ -473,7 +473,7 @@ void select_loop(int listenfd)
     /* Epoll main loop */
     while (1) {
 
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
         cleaner_thread();       /*Run the thread clearer */
 #endif
         int n, e;
@@ -540,7 +540,7 @@ void select_loop(int listenfd)
                 }
                 continue;
             }
-#ifdef 	NOPE_THREADS
+#ifdef 	WAFER_THREADS
             else if (socketpair_fd[1] == events[e].data.fd) {
                 nbytes = read(events[e].data.fd, socket_pair_buffer, 1);
                 dbgprintf(KCYN "SocketPair Read %d : %d\n" KCYN, events[e].data.fd,
@@ -596,7 +596,7 @@ void select_loop(int listenfd)
     /* Select main loop */
     while (1) {
 
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
         cleaner_thread();       /*Run the thread clearer */
 #endif
 
@@ -636,7 +636,7 @@ void select_loop(int listenfd)
     return;
 }
 
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
 
 void notify_parent()
 {
@@ -740,7 +740,7 @@ queue *queueInit(void)
     q->head = 0;
     q->tail = 0;
 
-#ifdef NOPE_MAX_CON_CONS
+#ifdef WAFER_MAX_CON_CONS
     q->buf = malloc(sizeof(THREAD_DATA) * MAX_NO_FDS);
 #endif
     q->mut = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
@@ -755,7 +755,7 @@ queue *queueInit(void)
 
 void queueDelete(queue * q)
 {
-#ifdef NOPE_MAX_CON_CONS
+#ifdef WAFER_MAX_CON_CONS
     free(q->buf);
 #endif
     pthread_mutex_destroy(q->mut);
@@ -816,7 +816,7 @@ int main(void)
     /*Ignore SIGPIPE signal, so if browser cancels the request, it won't kill the whole process. */
     signal(SIGPIPE, SIG_IGN);
 
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
     struct rlimit limit;
 
     limit.rlim_cur = MAX_NO_FDS * 4;
@@ -832,8 +832,8 @@ int main(void)
     initialize_threads();
 #endif
 
-#ifdef NOPE_PROCESSES
-    for (i = 0; i < NOPE_PROCESSES; i++) {
+#ifdef WAFER_PROCESSES
+    for (i = 0; i < WAFER_PROCESSES; i++) {
         int pid = fork();
         if (pid == 0) {         //  child
             select_loop(listenfd);

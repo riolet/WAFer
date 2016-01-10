@@ -1,5 +1,5 @@
-#ifndef NOPE_H_
-#define NOPE_H_
+#ifndef WAFER_H_
+#define WAFER_H_
 
 #include <arpa/inet.h>          /* inet_ntoa */
 #include <signal.h>
@@ -13,7 +13,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef NOPE_EPOLL
+#ifdef WAFER_EPOLL
 #include <sys/epoll.h>
 #else
 #include <sys/select.h>
@@ -25,7 +25,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <netdb.h>
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
 #include <sys/resource.h>
 #include <pthread.h>
 #endif
@@ -46,17 +46,17 @@ typedef int bool;
 #define true 1
 #define false 0
 
-#define SERVER_STRING "Server: nope.chttpd/0.1.0\r\n"
+#define SERVER_STRING "Server: wafer.chttpd/0.1.0\r\n"
 #define ToHex(Y) (Y>='0'&&Y<='9'?Y-'0':Y-'A'+10)
 #define UNDEFINED "VALUE_UNDEFINED"
 
 /* Settings */
-#define NOPE_ONE_K 1024
+#define WAFER_ONE_K 1024
 #define MAX_HEADERS 1024
 #define MAX_BUFFER_SIZE 1024
 #define MAX_DPRINTF_SIZE 64
-#ifdef NOPE_MAX_CON_CONS
-#define MAX_NO_FDS NOPE_MAX_CON_CONS
+#ifdef WAFER_MAX_CON_CONS
+#define MAX_NO_FDS WAFER_MAX_CON_CONS
 #else
 #define MAX_NO_FDS 1024
 #endif
@@ -123,12 +123,12 @@ typedef struct {
 #define LOG_ERROR_ON(_statement_,_condition_,_message_) do { if ((_statement_)==_condition_) fprintf(stderr,_message_); } while(0)
 #define LOG_ERROR_ON_NULL(_statement_,_message_) LOG_ERROR_ON(_statement_,NULL,_message_)
 #define NEW(T,v) do { T * v =  malloc(sizeof(T)); } while (0)
-#define NOPE_STR(X) #X
+#define WAFER_STR(X) #X
 /* Globals */
 int default_port;
 
 /*Thread stuff!*/
-#ifdef NOPE_THREADS
+#ifdef WAFER_THREADS
 #define QUEUESIZE MAX_NO_FDS
 
 /* select_loop stuff */
@@ -141,7 +141,7 @@ typedef struct {
 } THREAD_DATA;
 
 typedef struct {
-#ifdef NOPE_MAX_CON_CONS
+#ifdef WAFER_MAX_CON_CONS
     THREAD_DATA *buf;
 #else
     THREAD_DATA buf[QUEUESIZE];
@@ -174,4 +174,4 @@ long dbgprintf(const char *format, ...);
 
 void server(Request * request, Response * response);
 
-#endif                          /* NOPE_H_ */
+#endif                          /* WAFER_H_ */
