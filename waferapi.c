@@ -162,7 +162,7 @@ char *getHeader(char **headers, char *header)
                 while (*value == ' ' || *value == ':') {
                     value++;
                 }
-                strcpy(retval, value);
+                strncpy(retval, value, MAX_BUFFER_SIZE);
                 return retval;
             }
         }
@@ -265,9 +265,9 @@ bool routeRequest(Request *request, Response * response, const char *path, void 
  #ifndef __linux__
 ssize_t sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain)
 {
-    char buf[BUFFLEN];
+    char buf[MAX_BUFFER_SIZE];
     lseek(read_fd, *offset, SEEK_SET);
-    ssize_t bytes_read = read(read_fd, buf, BUFFLEN);
+    ssize_t bytes_read = read(read_fd, buf, MAX_BUFFER_SIZE);
     ssize_t bytes_written = write(write_fd, cbuf, bytes_read);
     return bytes_written;
 }

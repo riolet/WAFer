@@ -333,8 +333,12 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
                 if (idx == 0)
                     fdDataList[i].headers[fdDataList[i].headersIdx] =
                         malloc(MAX_BUFFER_SIZE * sizeof(char));
-                fdDataList[i].headers[fdDataList[i].headersIdx][idx] =
-                    fdDataList[i].readBuffer[j];
+                if (idx<MAX_BUFFER_SIZE) {
+                    fdDataList[i].headers[fdDataList[i].headersIdx][idx] =
+                        fdDataList[i].readBuffer[j];
+                } else { /* This header is way too long */
+                     fdDataList[i].state = STATE_COMPLETE_READING;
+                }
                 idx++;
             }
             j++;
