@@ -268,7 +268,7 @@ ssize_t sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain)
     char buf[MAX_BUFFER_SIZE];
     lseek(read_fd, *offset, SEEK_SET);
     ssize_t bytes_read = read(read_fd, buf, MAX_BUFFER_SIZE);
-    ssize_t bytes_written = write(write_fd, cbuf, bytes_read);
+    ssize_t bytes_written = write(write_fd, buf, bytes_read);
     return bytes_written;
 }
 #endif // __linux__
