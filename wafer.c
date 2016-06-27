@@ -4,7 +4,7 @@
 
 #include "wafer.h"
 
-static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, int * cur_state, int state) {
+static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, short int * cur_state, int state) {
 	if (conditition) {
 		*str=0;
 		*cur_state = state;
@@ -413,8 +413,9 @@ void select_loop(int listenfd)
 {
 
     /* Common vars */
-
+#ifdef WAFER_THREADS
     char socket_pair_buffer[2];
+#endif
     int nbytes;
 
     char remote_ip[INET6_ADDRSTRLEN];
@@ -431,10 +432,7 @@ void select_loop(int listenfd)
                       "Can't malloc() on fdDataList");
 #endif
 
-    struct timeval tv;
-    int poll_timeout = POLL_TIMEOUT;
-    tv.tv_sec = 0;
-    tv.tv_usec = POLL_TIMEOUT * 1000;
+
 
     /* keep track of the biggest file descriptor */
     fdmax = listenfd;           /* so far, it's this one */
@@ -443,6 +441,11 @@ void select_loop(int listenfd)
         fdDataList[fd].state = STATE_PRE_REQUEST;
     }
 #ifdef WAFER_EPOLL
+
+    struct timeval tv;
+    int poll_timeout = POLL_TIMEOUT;
+    tv.tv_sec = 0;
+    tv.tv_usec = POLL_TIMEOUT * 1000;
 
     int eventfd;
     struct epoll_event event;
@@ -806,9 +809,20 @@ int main(void)
     int listenfd;
 
     char *pPort = getenv("PORT");
+    char *pUid = getenv ("RUNASUID");
 
     if (pPort != NULL)
         default_port = (u_short) strtol(pPort, (char **)NULL, 10);
+
+    if (pUid != NULL) {
+        int uid = (u_short) strtol(pPort, (char **)NULL, 10);
+        setuid(uid);
+        if (getuid()!=uid) {
+            fprintf(stderr, "Could not set UID");
+            exit(EXIT_FAILURE);
+        }
+    }
+
 
     listenfd = open_listenfd(default_port);
     if (listenfd > 0) {

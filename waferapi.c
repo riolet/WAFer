@@ -9,6 +9,10 @@
 /*Internal functions don't use */
 ssize_t writeLongString(int client, const char *longString, size_t len);
 static void sendFileWithSelect(int client, int read_fd, struct stat stat_buf);
+#ifndef __linux__
+sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain);
+#endif
+char * getBufferSpace ();
 /*End internal functions */
 
 long resPrintf(Response * response, const char *format, ...)
@@ -24,7 +28,7 @@ long resPrintf(Response * response, const char *format, ...)
 		}
 	}
     /* initial buffer large enough for most cases, will resize if required */
-    char *buf = malloc(MAX_BUFFER_SIZE);
+    char *buf = getBufferSpace();
     int len;
 
     va_list arg;
@@ -148,11 +152,8 @@ char *getHeader(char **headers, char *header)
 {
     char *current_header, *matching_header, *value;
     // Not sure if MAX_BUFFER_SIZE is right.
-    char *retval = malloc(MAX_BUFFER_SIZE * sizeof(char));
-    if (retval == NULL) {
-        printf("Could not allocate memory.");
-        exit(EXIT_FAILURE);
-    }
+    char *retval = getBufferSpace();
+
     int i;
     for (i = 0; headers[i] != NULL; i++) {
         current_header = headers[i];
@@ -180,18 +181,15 @@ char *getHeader(char **headers, char *header)
 
 char *getQueryParam(Request *request, const char *name)
 {
-    char bufferAmpersand[MAX_BUFFER_SIZE];
-    char bufferQuestion[MAX_BUFFER_SIZE];
+    char * bufferAmpersand = getBufferSpace();;
+    char * bufferQuestion = getBufferSpace();;
     snprintf(bufferQuestion, MAX_BUFFER_SIZE - 1, "?%s=", name);
     snprintf(bufferAmpersand, MAX_BUFFER_SIZE - 1, "&%s=", name);
     char *buffer;
     char *pos1;
 
-    char *value = malloc(MAX_BUFFER_SIZE * sizeof(char));
-    if (value == NULL) {
-        printf("Could not allocate memory.");
-        exit(EXIT_FAILURE);
-    }
+    char *value = getBufferSpace();;
+
     int i;
 
     buffer = bufferQuestion;
@@ -204,7 +202,7 @@ char *getQueryParam(Request *request, const char *name)
     if (pos1) {
         pos1 += strlen(buffer);
         i = 0;
-        while (*pos1 && *pos1 != '&' && i < MAX_BUFFER_SIZE) {
+        while (*pos1 && *pos1 != '&' && i < MAX_BUFFER_SIZE-1) {
             if (*pos1 == '%') {
                 value[i] = (char)ToHex(pos1[1]) * 16 + ToHex(pos1[2]);
                 pos1 += 3;
@@ -220,6 +218,8 @@ char *getQueryParam(Request *request, const char *name)
         return value;
     }
 
+    free(bufferAmpersand);
+    free(bufferQuestion);
     free(value);
     value=NULL;
     return value;
@@ -262,13 +262,23 @@ bool routeRequest(Request *request, Response * response, const char *path, void 
 }
 
 /*Internal stuff follows. Could change in future. Do not use */
- #ifndef __linux__
+char * getBufferSpace () {
+    char *bufferSpace = malloc(MAX_BUFFER_SIZE * sizeof(char));
+    if (bufferSpace == NULL) {
+        fprintf(stderr, "Could not allocate memory.");
+        exit(EXIT_FAILURE);
+    }
+    return bufferSpace;
+}
+
+#ifndef __linux__
 ssize_t sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain)
 {
-    char buf[MAX_BUFFER_SIZE];
+    char * buf = getBufferSpace();
     lseek(read_fd, *offset, SEEK_SET);
     ssize_t bytes_read = read(read_fd, buf, MAX_BUFFER_SIZE);
     ssize_t bytes_written = write(write_fd, buf, bytes_read);
+    free(buf);
     return bytes_written;
 }
 #endif // __linux__

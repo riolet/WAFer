@@ -53,7 +53,7 @@ typedef int bool;
 /* Settings */
 #define WAFER_ONE_K 1024
 #define MAX_HEADERS 1024
-#define MAX_BUFFER_SIZE 1024
+#define MAX_BUFFER_SIZE 8192
 #define MAX_DPRINTF_SIZE 64
 #ifdef WAFER_MAX_CON_CONS
 #define MAX_NO_FDS WAFER_MAX_CON_CONS
