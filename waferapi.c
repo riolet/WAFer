@@ -10,7 +10,7 @@
 ssize_t writeLongString(int client, const char *longString, size_t len);
 static void sendFileWithSelect(int client, int read_fd, struct stat stat_buf);
 #ifndef __linux__
-sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain);
+ssize_t sendfile_wafer (int write_fd, int read_fd, off_t *offset,int remain);
 #endif
 char * getBufferSpace ();
 /*End internal functions */
