@@ -4,13 +4,17 @@
 
 #include "wafer.h"
 
-static inline bool on_conditition_terminate_string_change_state(bool conditition, char * str, int i, short int * cur_state, int state) {
-	if (conditition) {
-		*str=0;
-		*cur_state = state;
-		return true;
-	}
-	return false;
+static inline bool on_conditition_terminate_string_change_state(bool conditition,
+                                                                char *str, int i,
+                                                                short int *cur_state,
+                                                                int state)
+{
+    if (conditition) {
+        *str = 0;
+        *cur_state = state;
+        return true;
+    }
+    return false;
 }
 
 #define FCNTL_ADD(s, fl) fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | fl)
@@ -42,10 +46,14 @@ void new_fd_data(FdData * fd)
     fd->headersIdx = 0;
     fd->headers[fd->headersIdx] = NULL;
     fd->withinHeaderIdx = 0;
+    fd->contentData = 0;
+    fd->contentDataIdx = 0;
 }
 
 void free_fd_data(FdData * fd)
 {
+    if (fd->contentData)
+        free(fd->contentData);
     free(fd->readBuffer);
     free(fd->method);
     free(fd->uri);
@@ -224,18 +232,23 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_METHOD_SIZE) {
-        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_URI)) {
-        		j++;
-        		break;
-        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].method[idx],i,&fdDataList[i].state,STATE_HEADER)) {
-        		j++;
-        		break;
-        	} else if (fdDataList[i].readBuffer[j]=='\r') {
-        		/*do nothing */
-        	} else {
-        		fdDataList[i].method[idx++] = fdDataList[i].readBuffer[j];
-        	}
-        	j++;
+            if (on_conditition_terminate_string_change_state
+                (isspace(fdDataList[i].readBuffer[j]), &fdDataList[i].method[idx], i,
+                 &fdDataList[i].state, STATE_URI)) {
+                j++;
+                break;
+            } else
+                if (on_conditition_terminate_string_change_state
+                    (fdDataList[i].readBuffer[j] == '\n', &fdDataList[i].method[idx], i,
+                     &fdDataList[i].state, STATE_HEADER)) {
+                j++;
+                break;
+            } else if (fdDataList[i].readBuffer[j] == '\r') {
+                /*do nothing */
+            } else {
+                fdDataList[i].method[idx++] = fdDataList[i].readBuffer[j];
+            }
+            j++;
         }
 
         fdDataList[i].methodIdx = idx;
@@ -254,18 +267,23 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_REQUEST_SIZE) {
-        	if (on_conditition_terminate_string_change_state(isspace(fdDataList[i].readBuffer[j]),&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_VERSION)) {
-        		j++;
-        		break;
-        	} else if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].uri[idx],i,&fdDataList[i].state,STATE_HEADER)) {
-        		j++;
-        		break;
-        	} else if (fdDataList[i].readBuffer[j]=='\r') {
-        		/*do nothing */
-        	} else {
-        		fdDataList[i].uri[idx++] = fdDataList[i].readBuffer[j];
-        	}
-        	j++;
+            if (on_conditition_terminate_string_change_state
+                (isspace(fdDataList[i].readBuffer[j]), &fdDataList[i].uri[idx], i,
+                 &fdDataList[i].state, STATE_VERSION)) {
+                j++;
+                break;
+            } else
+                if (on_conditition_terminate_string_change_state
+                    (fdDataList[i].readBuffer[j] == '\n', &fdDataList[i].uri[idx], i,
+                     &fdDataList[i].state, STATE_HEADER)) {
+                j++;
+                break;
+            } else if (fdDataList[i].readBuffer[j] == '\r') {
+                /*do nothing */
+            } else {
+                fdDataList[i].uri[idx++] = fdDataList[i].readBuffer[j];
+            }
+            j++;
         }
 
         fdDataList[i].uriIdx = idx;
@@ -284,15 +302,17 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         len = fdDataList[i].readBufferLen;
 
         while (j < len && idx < MAX_VER_SIZE) {
-        	if (on_conditition_terminate_string_change_state(fdDataList[i].readBuffer[j]=='\n',&fdDataList[i].ver[idx],i,&fdDataList[i].state,STATE_HEADER)) {
-        		j++;
-        		break;
-			} else if (fdDataList[i].readBuffer[j]=='\r') {
-				/*do nothing */
-			} else {
-				fdDataList[i].ver[idx++] = fdDataList[i].readBuffer[j];
-			}
-        	j++;
+            if (on_conditition_terminate_string_change_state
+                (fdDataList[i].readBuffer[j] == '\n', &fdDataList[i].ver[idx], i,
+                 &fdDataList[i].state, STATE_HEADER)) {
+                j++;
+                break;
+            } else if (fdDataList[i].readBuffer[j] == '\r') {
+                /*do nothing */
+            } else {
+                fdDataList[i].ver[idx++] = fdDataList[i].readBuffer[j];
+            }
+            j++;
         }
         fdDataList[i].verIdx = idx;
         fdDataList[i].readBufferIdx = j;
@@ -304,6 +324,8 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         }
     }
 
+    int clength = 0;
+
     if (fdDataList[i].state == STATE_HEADER) {
         idx = fdDataList[i].withinHeaderIdx;
         j = fdDataList[i].readBufferIdx;
@@ -312,11 +334,25 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         while (j < len) {
             if (fdDataList[i].readBuffer[j] == '\n') {
                 if (idx == 0) {
-                    fdDataList[i].state = STATE_COMPLETE_READING;
+                    if (clength > 0) {
+                        fdDataList[i].state = STATE_CONTENT_DATA;
+                        fdDataList[i].contentData = malloc(clength + 1);
+                    } else {
+                        fdDataList[i].state = STATE_COMPLETE_READING;
+                        fdDataList[i].contentDataIdx = 0;
+                    }
                     j++;
                     break;      /* The last of headers */
                 }
                 fdDataList[i].headers[fdDataList[i].headersIdx][idx] = 0;
+                if (strncmp
+                    (fdDataList[i].headers[fdDataList[i].headersIdx], "Content-Length:",
+                     strlen("Content-Length:")) == 0) {
+                    clength =
+                        atoi(fdDataList[i].headers[fdDataList[i].headersIdx] +
+                             strlen("Content-Length:"));
+                    //printf("Content Length is %d\n",clength);
+                }
                 if (fdDataList[i].headersIdx < MAX_HEADERS)
                     fdDataList[i].headersIdx++;
                 else {
@@ -333,11 +369,11 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
                 if (idx == 0)
                     fdDataList[i].headers[fdDataList[i].headersIdx] =
                         malloc(MAX_BUFFER_SIZE * sizeof(char));
-                if (idx<MAX_BUFFER_SIZE) {
+                if (idx < MAX_BUFFER_SIZE) {
                     fdDataList[i].headers[fdDataList[i].headersIdx][idx] =
                         fdDataList[i].readBuffer[j];
-                } else { /* This header is way too long */
-                     fdDataList[i].state = STATE_COMPLETE_READING;
+                } else {        /* This header is way too long */
+                    fdDataList[i].state = STATE_COMPLETE_READING;
                 }
                 idx++;
             }
@@ -346,6 +382,35 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
 
         fdDataList[i].withinHeaderIdx = idx;
         fdDataList[i].readBufferIdx = j;
+    }
+
+    if (fdDataList[i].state == STATE_CONTENT_DATA) {
+
+        idx = fdDataList[i].contentDataIdx;
+        j = fdDataList[i].readBufferIdx;
+        len = fdDataList[i].readBufferLen;
+
+        while ((j < len) && (idx < clength)) {
+            if (on_conditition_terminate_string_change_state
+                (fdDataList[i].readBuffer[j] == '\n', &fdDataList[i].contentData[idx], i,
+                 &fdDataList[i].state, STATE_COMPLETE_READING)) {
+                j++;
+                break;
+            } else if (fdDataList[i].readBuffer[j] == '\r') {
+                /*do nothing */
+            } else {
+                fdDataList[i].contentData[idx++] = fdDataList[i].readBuffer[j];
+            }
+            j++;
+        }
+
+        fdDataList[i].contentDataIdx = idx;
+        fdDataList[i].readBufferIdx = j;
+
+        if (idx == clength) {
+            fdDataList[i].contentData[idx] = 0;
+            fdDataList[i].state = STATE_COMPLETE_READING;
+        }
     }
 
     Request request;
@@ -359,10 +424,12 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         request.verLen = fdDataList[i].verIdx;
         request.headers = fdDataList[i].headers;
         request.headersLen = fdDataList[i].headersIdx;
-        response.fd=i;
-        response.flags=0;
-        response.apiFlags=0;
-        response.status=0;
+        request.contentData = fdDataList[i].contentData;
+        request.contentDataLen = fdDataList[i].contentDataIdx;
+        response.fd = i;
+        response.flags = 0;
+        response.apiFlags = 0;
+        response.status = 0;
         dbgprintf(KGRN "Calling Worker with:%s\n" KNRM, request.reqStr);
 #ifdef WAFER_THREADS
         THREAD_DATA td;
@@ -376,7 +443,7 @@ int state_machine(FdData * fdDataList, int i, int nbytes, fd_set * pMaster)
         dbgprintf(KNRM "SM:Done Farming %d->%d\n" KNRM, fifo->head, fifo->tail);
         done = false;
 #else
-        server(&request,&response);
+        server(&request, &response);
         dbgprintf(KGRN "Worker: completed with response %d\n" KNRM, response.status);
         done = true;
 #endif
@@ -403,8 +470,10 @@ void initialize_threads()
         //con+=sizeof(pthread_t);
     }
     socketpair(AF_UNIX, SOCK_STREAM, 0, socketpair_fd);
-    if (FCNTL_NONBLOCK(socketpair_fd[0]) < 0) perror("fcntl");
-    if (FCNTL_NONBLOCK(socketpair_fd[1]) < 0) perror("fcntl");
+    if (FCNTL_NONBLOCK(socketpair_fd[0]) < 0)
+        perror("fcntl");
+    if (FCNTL_NONBLOCK(socketpair_fd[1]) < 0)
+        perror("fcntl");
     dbgprintf("Socketpair 1 %d and 2 %d \n", socketpair_fd[0], socketpair_fd[1]);
 }
 #endif
@@ -431,8 +500,6 @@ void select_loop(int listenfd)
                       malloc(sizeof(FdData) * MAX_NO_FDS),
                       "Can't malloc() on fdDataList");
 #endif
-
-
 
     /* keep track of the biggest file descriptor */
     fdmax = listenfd;           /* so far, it's this one */
@@ -713,8 +780,9 @@ void *worker_thread(void *arg)
         pthread_cond_signal(fifo->notFull);
         dbgprintf("td.fdDataList %d, td.fd %d, td.pMaster %d, td.request.headers0 %s\n",
                   td.fdDataList, td.fd, td.pMaster, td.request.headers[0]);
-        server(&td.request,&td.response);
-        dbgprintf(KGRN "Worker: completed %d with response %d\n" KNRM, td.fd,td.response.status);
+        server(&td.request, &td.response);
+        dbgprintf(KGRN "Worker: completed %d with response %d\n" KNRM, td.fd,
+                  td.response.status);
         //clear_connection_baggage(td.fdDataList, td.fd, td.pMaster);
         pthread_mutex_lock(cleaner_fifo->mut);
         while (cleaner_fifo->full) {
@@ -809,20 +877,19 @@ int main(void)
     int listenfd;
 
     char *pPort = getenv("PORT");
-    char *pUid = getenv ("RUNASUID");
+    char *pUid = getenv("RUNASUID");
 
     if (pPort != NULL)
         default_port = (u_short) strtol(pPort, (char **)NULL, 10);
 
     if (pUid != NULL) {
-        int uid = (u_short) strtol(pPort, (char **)NULL, 10);
+        uid_t uid = (u_short) strtol(pPort, (char **)NULL, 10);
         setuid(uid);
-        if (getuid()!=uid) {
+        if (getuid() != uid) {
             fprintf(stderr, "Could not set UID");
             exit(EXIT_FAILURE);
         }
     }
-
 
     listenfd = open_listenfd(default_port);
     if (listenfd > 0) {

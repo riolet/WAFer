@@ -71,7 +71,8 @@ typedef int bool;
 #define STATE_URI 2
 #define STATE_VERSION 3
 #define STATE_HEADER 4
-#define STATE_COMPLETE_READING 5
+#define STATE_CONTENT_DATA 5
+#define STATE_COMPLETE_READING 6
 
 #define STATUS_HTTP_OK 200
 #define STATUS_HTTP_NOT_FOUND 404
@@ -85,6 +86,8 @@ typedef struct struct_request {
     size_t verLen;
     char **headers;
     size_t headersLen;
+    char *contentData;
+    size_t contentDataLen;
 } Request;
 
 typedef struct struct_response {
@@ -109,6 +112,8 @@ typedef struct {
     char **headers;
     short headersIdx;
     short withinHeaderIdx;
+    char *contentData;
+    short contentDataIdx;
 } FdData;
 
 #define LISTENQ  1024           /* second argument to listen() */
