@@ -31,19 +31,22 @@
 #define QTAGAPARAMQ(tag,attributes,text) OTAGA(tag,attributes name=STR(q)) text CTAG(tag)       /*<tag attributes> text </tag> */
 /* End ENTL */
 
-long resPrintf(Response *response, const char *format, ...);
-void serveFile(Response *response, const char *filename, const char *displayFilename,
-                           const char *type);
+long resPrintf(Response * response, const char *format, ...);
+void serveFile(Request * request, Response * response, const char *filename,
+               const char *displayFilename, const char *type);
 
-void sendStatusOKHeadersTypeEncoding(Response *response, const char *type, const char *encoding);
-void sendResourceNotFound(Response *response);
+void sendStatusOKHeadersTypeEncoding(Response * response, const char *type,
+                                     const char *encoding);
+void sendResourceNotFound(Response * response);
 
-char *resQuickForm(Request *request, Response *response, const char *msg, const char *inputstr);
+char *resQuickForm(Request * request, Response * response, const char *msg,
+                   const char *inputstr);
 #define QUICK_FORM_TEXT(request,response,msg) resQuickForm(request,response,msg,STAGPARAMQ(input,type="text"))
 
-char *getQueryParam(Request *request, const char *name);
-char *getQueryPath(Request *request);
-bool routeRequest(Request *request, Response * response, const char *path, void (*function) (Request *, Response *));
+char *getQueryParam(Request * request, const char *name);
+char *getQueryPath(Request * request);
+bool routeRequest(Request * request, Response * response, const char *path,
+                  void (*function) (Request *, Response *));
 long resPuts(Response * response, const char *buffer);
 /*Internal stuff follows. Could change in future. Do not use */
 #define STATIC_SEND(_socket, _str) send(_socket, _str, sizeof(_str)-1, 0)
