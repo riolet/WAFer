@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/riolet/WAFer.svg?branch=master)](https://travis-ci.org/riolet/WAFer)
 
-#WAFer
+# WAFer
 
 WAFer is a C language-based ultra-light scalable server-side web applications framework. Think node.js for C programmers. Because it's written in C for the C eco system, WAFer is wafer-thins with a memory footprint that is only a fraction of that of node.js and other bulky frameworks.
 
@@ -20,16 +20,17 @@ Default port is 4242. Set environment variable 'PORT' to change it.
 
 That's really it. The source comes with a simple example `example.c` to get you started.
 
-###Note to Contributors
+### Note to Contributors
 
 Thank you for making this a wonderful project!
 
 Here's our preferred formatting style:
 
-  `find . \( -name '*.c' -o -name '*.h' \) -exec indent --no-tabs  --linux-style --line-length 90 --indent-level 4 -bli0 \{\} \;`
-  
+```
+find . \( -name '*.c' -o -name '*.h' \) -exec indent --no-tabs  --linux-style --line-length 90 --indent-level 4 -bli0 \{\} \;
+```
 
-###Acknowledgements
+### Acknowledgements
 
 1. [J. David Blackstone](http://sourceforge.net/u/jdavidb/profile/) and [Feng Shen](https://github.com/shenfeng), whose web servers have been repurposed to build this platform.
 
