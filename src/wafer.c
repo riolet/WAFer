@@ -883,7 +883,7 @@ int main(void)
         default_port = (u_short) strtol(pPort, (char **)NULL, 10);
 
     if (pUid != NULL) {
-        uid_t uid = (u_short) strtol(pPort, (char **)NULL, 10);
+        uid_t uid = (u_short) strtol(pUid, (char **)NULL, 10);
         setuid(uid);
         if (getuid() != uid) {
             fprintf(stderr, "Could not set UID");
